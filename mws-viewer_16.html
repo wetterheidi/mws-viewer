@@ -811,6 +811,11 @@ body.day-mode #metar-icao { background: #ffffff; border-color: var(--border); }
   color: var(--text);
 }
 body.day-mode .metar-table tbody td { border-bottom: 1px solid #c0c6d0; }
+body.day-mode #alert-banner { background: #fce8e4; }
+body.day-mode .alert-table input[type=number] { background: #ffffff; border-color: var(--border); color: var(--text); }
+body.day-mode .alert-table select { background: #ffffff; border-color: var(--border); color: var(--text); }
+body.day-mode .alert-table tr.a-active td { background: rgba(184,0,0,0.06); }
+body.day-mode .al-ts { color: var(--text3); }
 .metar-string-cell { white-space: pre; letter-spacing: 0.2px; }
 /* METAR part colour spans */
 .mt-id   { color: var(--accent); font-weight: 500; }
@@ -1022,8 +1027,8 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   <div class="tab" onclick="switchTab('station')">📡 Station</div>
   <div class="tab" onclick="switchTab('met')">🌤 Meteorologie</div>
   <div class="tab" onclick="switchTab('metar')">✈️ METAR</div>
-  <div class="tab" onclick="switchTab('docs')">📖 Dokumentation</div>
   <div class="tab" id="tab-alerts" onclick="switchTab('alerts')">🔔 Alarme</div>
+  <div class="tab" onclick="switchTab('docs')">📖 Dokumentation</div>
 </div>
 
 <div id="alert-banner" style="display:none">
@@ -1291,31 +1296,62 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
       <div class="doc-section">
         <h2 class="doc-h2">Bedienung</h2>
         <p>Rohdatenpakete im Textfeld oben einfügen (Zeilenweise oder semikolongetrennt) und <em>Laden &amp; Analysieren</em> klicken. Die Anwendung verarbeitet beliebig viele Pakete gleichzeitig und sortiert sie chronologisch.</p>
+        <h3 class="doc-h3">Datenquellen</h3>
+        <table class="doc-table">
+          <thead><tr><th>Quelle</th><th>Beschreibung</th><th>Internet nötig</th></tr></thead>
+          <tbody>
+            <tr><td>CSV-Datei öffnen</td><td>Exportierte Monatsdatei (Quantimet-Format) per Dateidialog laden</td><td>Nein</td></tr>
+            <tr><td>Datei-Polling</td><td>MWS per USB angeschlossen; Datei wird automatisch alle 5 Min neu eingelesen</td><td>Nein</td></tr>
+            <tr><td>Quantimet Live</td><td>Direktabfrage der Quantimet-API; erfordert laufenden MWS-Server</td><td>Ja</td></tr>
+            <tr><td>Rohdaten einfügen</td><td>@0deN-Pakete direkt ins Textfeld einfügen und parsen</td><td>Nein</td></tr>
+          </tbody>
+        </table>
+        <h3 class="doc-h3">Offline-Betrieb</h3>
+        <p>Die HTML-Datei ist vollständig in sich geschlossen (Chart.js eingebettet, System-Schriftarten als Fallback). Datenquellen CSV, Datei-Polling und Rohdaten funktionieren ohne Internetverbindung. Quantimet-Zugriff erfordert den MWS-Server; beim Öffnen der Datei direkt im Browser (<code>file://</code>) erscheint stattdessen ein Link zur Web-Version.</p>
         <h3 class="doc-h3">Tabs</h3>
         <table class="doc-table">
           <thead><tr><th>Tab</th><th>Inhalt</th></tr></thead>
           <tbody>
             <tr><td>📋 Rohtabelle</td><td>Alle geparsten Parameter als Tabelle, einheitensensitiv. Farbkodierung: Batterie (grün/gelb), Temperatur (blau), fehlende Werte (—).</td></tr>
             <tr><td>📡 Station</td><td>Stationsfixe (GPS, Kompass, Tilt), Batteriespannungsverlauf, Ceilometer-Rohdaten.</td></tr>
-            <tr><td>🌤 Meteorologie</td><td>Zeitreihen aller meteorologischen Parameter. Einheitenumschaltung und lineare Offset-Korrektur interaktiv.</td></tr>
+            <tr><td>🌤 Meteorologie</td><td>Zeitreihen aller meteorologischen Parameter inkl. Blitzsensor. Einheitenumschaltung und lineare Offset-Korrektur interaktiv.</td></tr>
             <tr><td>✈️ METAR</td><td>Automatisch erzeugte METAR-Meldungen im europäischen ICAO-Format für jeden Datensatz. Frei eingebbare ICAO-Kennung, farbkodierte Ausgabe, Kopier-Funktion je Zeile.</td></tr>
+            <tr><td>🔔 Alarme</td><td>Schwellenwert-Alarme für alle meteorologischen Parameter. Visueller Banner, Ton-Alarm und Browser-Benachrichtigung. Einstellungen werden im Browser gespeichert.</td></tr>
             <tr><td>📖 Dokumentation</td><td>Diese Seite.</td></tr>
           </tbody>
         </table>
         <h3 class="doc-h3">Einheitenumschaltung</h3>
+        <p>Die gewählten Einheiten werden im Browser gespeichert (localStorage) und bleiben nach einem Reload erhalten.</p>
         <table class="doc-table">
           <thead><tr><th>Parameter</th><th>Verfügbare Einheiten</th><th>Basiseinheit (intern)</th></tr></thead>
           <tbody>
             <tr><td>Temperatur</td><td>°C, °F, K</td><td>°C</td></tr>
             <tr><td>Luftdruck</td><td>hPa, inHg, mmHg</td><td>hPa</td></tr>
             <tr><td>Wind / Böen</td><td>kn, m/s, km/h, mph</td><td>kn</td></tr>
-            <tr><td>Sichtweite</td><td>mi, km, m</td><td>mi (statute miles)</td></tr>
+            <tr><td>Sichtweite / Blitz</td><td>mi, km, m</td><td>mi (statute miles)</td></tr>
             <tr><td>Wolkenhöhe</td><td>m, ft</td><td>m</td></tr>
             <tr><td>Niederschlag</td><td>in/h, mm/h</td><td>in/h</td></tr>
           </tbody>
         </table>
         <h3 class="doc-h3">Offset-Korrektur</h3>
         <p>Lineare Offsets werden auf den Rohwert addiert, bevor die Einheitenkonvertierung erfolgt. Ein Windrichtungs-Offset wird modulo 360° gewrappt. Alle Offsets beeinflussen Tabelle und Charts gleichzeitig.</p>
+      </div>
+
+      <div class="doc-section">
+        <h2 class="doc-h2">Alarm-System</h2>
+        <p>Im Tab <strong>🔔 Alarme</strong> können für jeden Parameter individuelle Schwellenwerte (Überschreitung &gt; und Unterschreitung &lt;) aktiviert werden. Jede Zeile hat eine eigene Einheitenwahl unabhängig von der Einheitenumschaltung im Meteorologie-Tab.</p>
+        <table class="doc-table">
+          <thead><tr><th>Funktion</th><th>Beschreibung</th></tr></thead>
+          <tbody>
+            <tr><td>Visueller Banner</td><td>Sobald ein aktiver Schwellenwert überschritten wird, erscheint ein roter Hinweisstreifen unterhalb der Tab-Leiste — sichtbar aus jedem Tab. Der Tab-Titel zeigt die Anzahl aktiver Alarme.</td></tr>
+            <tr><td>Ton-Alarm</td><td>Dreifacher Signalton via Web Audio API (kein Server, kein Plugin nötig).</td></tr>
+            <tr><td>Browser-Benachrichtigung</td><td>Push-Benachrichtigung des Betriebssystems, auch wenn der Tab im Hintergrund ist. Erfordert einmalige Berechtigung über den Button „Berechtigung anfragen".</td></tr>
+            <tr><td>Alarm-Protokoll</td><td>Timestamped Liste aller ausgelösten Alarme in der aktuellen Browser-Session.</td></tr>
+            <tr><td>Persistenz</td><td>Alle Alarm-Einstellungen (EIN/AUS, Schwellen, Einheiten, Ton, Browser) werden im Browser gespeichert und nach dem Reload wiederhergestellt.</td></tr>
+            <tr><td>Prüfzeitpunkt</td><td>Automatisch nach jedem Datenladen und nach jedem 5-Minuten-Poll — immer auf dem neuesten Datensatz.</td></tr>
+          </tbody>
+        </table>
+        <p><strong>Hinweis Mehrbenutzer:</strong> Die Einstellungen sind pro Browser/Gerät gespeichert. Verschiedene Nutzer auf verschiedenen Geräten haben vollständig unabhängige Alarm-Konfigurationen.</p>
       </div>
 
       <div class="doc-section">
@@ -2387,7 +2423,7 @@ function cvtVis(mi) {
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  const tabs=['table','station','met','metar','docs','alerts'];
+  const tabs=['table','station','met','metar','alerts','docs'];
   document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
   document.getElementById('panel-'+id).classList.add('active');
   if (id==='alerts') {
