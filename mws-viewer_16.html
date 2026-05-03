@@ -1159,7 +1159,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         </div>
         <!-- Zeile 7: Blitzsensor (ganze Breite) -->
         <div class="chart-card wide tall">
-          <div class="chart-header"><span class="chart-title">Blitzsensor — Anzahl &amp; Distanz (mi)</span></div>
+          <div class="chart-header"><span class="chart-title" id="title-ld">Blitzsensor — Anzahl &amp; Distanz (mi)</span></div>
           <canvas id="chart-ld"></canvas>
         </div>
       </div>
@@ -2679,6 +2679,13 @@ function redrawMet() {
   });
 
   // Lightning
+  const ldDistLabel = {'mi':'mi','km':'km','m':'m'}[units.vis];
+  const cvtLdDist = mi => {
+    if(units.vis==='km') return parseFloat((mi*1.60934).toFixed(2));
+    if(units.vis==='m') return Math.round(mi*1609.34);
+    return parseFloat(mi.toFixed(1));
+  };
+  document.getElementById('title-ld').textContent=`Blitzsensor — Anzahl & Distanz (${ldDistLabel})`;
   mkChart('chart-ld',{
     type:'bar',
     data:{labels:lbl,datasets:[
@@ -2691,8 +2698,8 @@ function redrawMet() {
         yAxisID:'y',
       },
       {
-        label:'Distanz (mi)',
-        data:data.map(d=>d.ldDist!=null?d.ldDist:null),
+        label:`Distanz (${ldDistLabel})`,
+        data:data.map(d=>d.ldDist!=null?cvtLdDist(d.ldDist):null),
         type:'line',
         borderColor:C.yellow(),
         backgroundColor:'transparent',
@@ -2714,7 +2721,7 @@ function redrawMet() {
             ticks:{color:C.tick(),font:{family:'Share Tech Mono',size:10}},
             grid:{drawOnChartArea:false},
             border:{color:document.body.classList.contains('day-mode')?'#1a1f2e':'#30363d'},
-            title:{display:true,text:'Distanz (mi)',color:C.tick(),font:{family:'Barlow Condensed'}}}
+            title:{display:true,text:`Distanz (${ldDistLabel})`,color:C.tick(),font:{family:'Barlow Condensed'}}}
       }
     }
   });
