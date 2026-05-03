@@ -310,6 +310,67 @@ tbody td.bad { color: var(--accent3); }
 .chart-card canvas { max-height: 180px; }
 .chart-card.tall canvas { max-height: 260px; }
 
+/* ── ALERT BANNER ── */
+#alert-banner {
+  background: #2a0d00;
+  border-bottom: 2px solid var(--accent3);
+  padding: 9px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+#alert-banner-items { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; }
+.alert-badge {
+  background: var(--accent3);
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 9px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+#alert-dismiss {
+  background: none;
+  border: 1px solid var(--accent3);
+  color: var(--accent3);
+  border-radius: 4px;
+  padding: 2px 9px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ── ALERTS PANEL ── */
+.alerts-wrap { max-width: 960px; }
+.alerts-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; }
+.alerts-top h2 { font-family: var(--head); font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text); margin: 0; }
+.alerts-options { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.alert-opt-lbl { font-family: var(--head); font-size: 11px; color: var(--text2); cursor: pointer; display: flex; align-items: center; gap: 5px; }
+.alert-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; margin-bottom: 6px; }
+.alert-table th { text-align: left; font-family: var(--head); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--text2); border-bottom: 1px solid var(--border); padding: 7px 10px; }
+.alert-table td { border-bottom: 1px solid var(--border); padding: 7px 10px; vertical-align: middle; }
+.alert-table tr.a-active td { background: rgba(247,129,102,0.07); }
+.alert-table input[type=number] { width: 76px; background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 6px; font-family: var(--mono); font-size: 12px; }
+.alert-table input[type=number]:focus { outline: none; border-color: var(--accent); }
+.alert-table select { background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 6px; font-family: var(--head); font-size: 11px; cursor: pointer; }
+.alert-en-btn { padding: 3px 12px; border-radius: 4px; font-family: var(--head); font-size: 10px; letter-spacing: 1px; font-weight: 700; cursor: pointer; border: 1px solid var(--border); transition: all 0.1s; }
+.alert-en-btn.on  { background: var(--accent3); border-color: var(--accent3); color: #fff; }
+.alert-en-btn.off { background: var(--bg3); color: var(--text2); }
+.alert-cur { color: var(--text2); min-width: 55px; display: inline-block; }
+.alert-cur.hit { color: var(--accent3); font-weight: 700; }
+.alert-log-section { margin-top: 30px; }
+.alert-log-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.alert-log-hdr span { font-family: var(--head); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--text2); }
+#alert-log { max-height: 280px; overflow-y: auto; font-family: var(--mono); font-size: 11px; }
+.al-entry { padding: 5px 0; border-bottom: 1px solid var(--border); display: flex; gap: 14px; }
+.al-ts  { color: var(--text3); min-width: 130px; flex-shrink: 0; }
+.al-msg { color: var(--accent3); }
+.btn-sec { background: var(--bg3); border: 1px solid var(--border); color: var(--text2); border-radius: 4px; padding: 4px 12px; font-family: var(--head); font-size: 10px; letter-spacing: 1px; cursor: pointer; }
+.btn-sec:hover { border-color: var(--accent); color: var(--text); }
+
 /* ── MET CONTROLS ── */
 .met-controls {
   display: flex;
@@ -960,6 +1021,12 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   <div class="tab" onclick="switchTab('met')">🌤 Meteorologie</div>
   <div class="tab" onclick="switchTab('metar')">✈️ METAR</div>
   <div class="tab" onclick="switchTab('docs')">📖 Dokumentation</div>
+  <div class="tab" id="tab-alerts" onclick="switchTab('alerts')">🔔 Alarme</div>
+</div>
+
+<div id="alert-banner" style="display:none">
+  <div id="alert-banner-items"></div>
+  <button id="alert-dismiss" onclick="document.getElementById('alert-banner').style.display='none'" title="Schließen">✕</button>
 </div>
 
 <div id="time-filter-bar">
@@ -1494,6 +1561,46 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
     </div>
   </div>
 
+  <!-- TAB 6: ALARME -->
+  <div class="tab-panel" id="panel-alerts">
+    <div class="alerts-wrap">
+      <div class="alerts-top">
+        <h2>Schwellenwert-Alarme</h2>
+        <div class="alerts-options">
+          <label class="alert-opt-lbl">
+            <input type="checkbox" id="alert-audio" onchange="alertDefs._audio=this.checked;saveAlerts()">
+            Ton-Alarm
+          </label>
+          <label class="alert-opt-lbl">
+            <input type="checkbox" id="alert-browser" onchange="alertDefs._browser=this.checked;saveAlerts()">
+            Browser-Benachrichtigung
+          </label>
+          <button class="btn-sec" onclick="requestNotifPermission()">Berechtigung anfragen</button>
+        </div>
+      </div>
+      <table class="alert-table">
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Aktiv</th>
+            <th>&gt; Schwelle</th>
+            <th>&lt; Schwelle</th>
+            <th>Einheit</th>
+            <th>Aktuell</th>
+          </tr>
+        </thead>
+        <tbody id="alert-tbody"></tbody>
+      </table>
+      <div class="alert-log-section">
+        <div class="alert-log-hdr">
+          <span>Alarm-Protokoll (Session)</span>
+          <button class="btn-sec" onclick="alertLog=[];renderAlertLog()">Leeren</button>
+        </div>
+        <div id="alert-log"><span style="color:var(--text3);font-size:11px">Keine Alarme in dieser Session.</span></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -1513,6 +1620,32 @@ let activeImei   = null;
 
 const units = { temp:'C', pres:'hPa', wind:'kt', vis:'mi', ceil:'m', precip:'inh' };
 const chartInstances = {};
+
+// ─────────────────────────────────────────────
+//  ALARM-SYSTEM
+// ─────────────────────────────────────────────
+const ALERT_PARAMS = [
+  { key:'temp',    label:'Temperatur',    opts:[['C','°C'],['F','°F'],['K','K']],                    def:'C'   },
+  { key:'wind',    label:'Wind',          opts:[['kt','kt'],['ms','m/s'],['kmh','km/h'],['mph','mph']],def:'kt'  },
+  { key:'gust',    label:'Böe (max)',     opts:[['kt','kt'],['ms','m/s'],['kmh','km/h'],['mph','mph']],def:'kt'  },
+  { key:'vis',     label:'Sichtweite',    opts:[['mi','mi'],['km','km'],['m','m']],                  def:'mi'  },
+  { key:'precip',  label:'Niederschlag',  opts:[['inh','in/h'],['mmh','mm/h']],                     def:'inh' },
+  { key:'ceil',    label:'Wolkenbasis',   opts:[['m','m'],['ft','ft']],                              def:'m'   },
+  { key:'pres',    label:'Luftdruck',     opts:[['hPa','hPa'],['inHg','inHg'],['mmHg','mmHg']],     def:'hPa' },
+  { key:'rh',      label:'Rel. Feuchte',  opts:[['pct','%']],                                       def:'pct' },
+  { key:'ldDist',  label:'Blitz Distanz', opts:[['mi','mi'],['km','km']],                           def:'mi'  },
+  { key:'ldCount', label:'Blitz Anzahl',  opts:[['n','#']],                                         def:'n'   },
+  { key:'batt',    label:'Batterie',      opts:[['v','V']],                                         def:'v'   },
+  { key:'tilt',    label:'Neigung',       opts:[['deg','°']],                                       def:'deg' },
+];
+
+function defaultAlertDefs() {
+  const d = { _audio: false, _browser: false };
+  ALERT_PARAMS.forEach(p => { d[p.key] = { en: false, gt: '', lt: '', unit: p.def }; });
+  return d;
+}
+let alertDefs = defaultAlertDefs();
+let alertLog  = [];
 
 // ─────────────────────────────────────────────
 //  TAGESMODUS
@@ -1760,6 +1893,7 @@ function applyTimeFilter() {
   renderMet(parsedData);
   renderMetar(parsedData);
   updateAvailBar();
+  checkAlerts(parsedData.length ? parsedData[parsedData.length-1] : null);
 }
 
 function updateAvailBar() {
@@ -2241,11 +2375,183 @@ function cvtVis(mi) {
 //  UI HELPERS
 // ─────────────────────────────────────────────
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  const tabs=['table','station','met','metar','docs'];
+  const tabs=['table','station','met','metar','docs','alerts'];
   document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
   document.getElementById('panel-'+id).classList.add('active');
+  if (id==='alerts') {
+    renderAlertsPanel();
+    renderAlertLog();
+    const latest = parsedData.length ? parsedData[parsedData.length-1] : null;
+    updateAlertCurrentCells(latest);
+  }
+}
+
+// ── Alert: localStorage ──────────────────────
+function saveAlerts() {
+  localStorage.setItem('mws-alerts', JSON.stringify(alertDefs));
+}
+function loadAlerts() {
+  try {
+    const s = localStorage.getItem('mws-alerts');
+    if (!s) return;
+    const saved = JSON.parse(s);
+    // Merge carefully: keep new keys from defaultAlertDefs
+    Object.keys(saved).forEach(k => {
+      if (k in alertDefs) alertDefs[k] = saved[k];
+    });
+  } catch(e) {}
+}
+
+// ── Alert: value in display-unit ─────────────
+function alertVal(key, unit, r) {
+  if (!r) return null;
+  switch(key) {
+    case 'temp':    if(r.tempC==null)    return null; return unit==='F'?r.tempC*9/5+32:unit==='K'?r.tempC+273.15:r.tempC;
+    case 'wind':    if(r.windKt==null)   return null; return unit==='ms'?r.windKt*0.5144:unit==='kmh'?r.windKt*1.852:unit==='mph'?r.windKt*1.15078:r.windKt;
+    case 'gust':    if(r.gustKt==null)   return null; return unit==='ms'?r.gustKt*0.5144:unit==='kmh'?r.gustKt*1.852:unit==='mph'?r.gustKt*1.15078:r.gustKt;
+    case 'vis':     if(r.visMi==null)    return null; return unit==='km'?r.visMi*1.60934:unit==='m'?r.visMi*1609.34:r.visMi;
+    case 'precip':  if(r.precipInH==null)return null; return unit==='mmh'?r.precipInH*25.4:r.precipInH;
+    case 'ceil': {  const h=(r.ceilH||[]).find(v=>v!=null); return h!=null?(unit==='ft'?Math.round(h*3.28084):h):null; }
+    case 'pres':    if(r.pressHPa==null) return null; return unit==='inHg'?r.pressHPa*0.02953:unit==='mmHg'?r.pressHPa*0.75006:r.pressHPa;
+    case 'rh':      return r.rh??null;
+    case 'ldDist':  return r.ldDist!=null?(unit==='km'?r.ldDist*1.60934:r.ldDist):null;
+    case 'ldCount': return r.ldCount??0;
+    case 'batt':    return r.battV??null;
+    case 'tilt':    return r.tilt??null;
+  }
+  return null;
+}
+
+// ── Alert: check latest record ───────────────
+function checkAlerts(record) {
+  if (!record) { updateAlertBanner([]); return; }
+  const triggered = [];
+  ALERT_PARAMS.forEach(({key, label}) => {
+    const def = alertDefs[key];
+    if (!def.en) return;
+    const val = alertVal(key, def.unit, record);
+    if (val == null) return;
+    const gt = def.gt !== '' ? parseFloat(def.gt) : null;
+    const lt = def.lt !== '' ? parseFloat(def.lt) : null;
+    if (gt != null && val > gt) triggered.push({key, label, val, threshold:gt, cond:'>',  unit:def.unit});
+    if (lt != null && val < lt) triggered.push({key, label, val, threshold:lt, cond:'<', unit:def.unit});
+  });
+  updateAlertBanner(triggered);
+  if (triggered.length > 0) {
+    const ts = record.datetime
+      ? record.datetime.toISOString().slice(0,16).replace('T',' ')+'Z'
+      : new Date().toISOString().slice(0,16).replace('T',' ')+'Z';
+    triggered.forEach(t => alertLog.unshift({...t, ts}));
+    if (alertLog.length > 200) alertLog.length = 200;
+    if (alertDefs._audio) playAlertBeep();
+    if (alertDefs._browser && Notification.permission==='granted') {
+      new Notification('MWS Alarm', {
+        body: triggered.map(t=>`${t.label} ${t.cond} ${t.threshold} ${t.unit}: ${+t.val.toFixed(1)}`).join('\n')
+      });
+    }
+  }
+  updateAlertCurrentCells(record);
+}
+
+function updateAlertBanner(triggered) {
+  const banner = document.getElementById('alert-banner');
+  if (!banner) return;
+  const tab = document.getElementById('tab-alerts');
+  if (!triggered.length) {
+    banner.style.display = 'none';
+    if (tab) tab.textContent = '🔔 Alarme';
+    return;
+  }
+  banner.style.display = 'flex';
+  document.getElementById('alert-banner-items').innerHTML =
+    triggered.map(t=>`<span class="alert-badge">${t.label} ${t.cond} ${t.threshold} ${t.unit} (${+t.val.toFixed(1)})</span>`).join('');
+  if (tab) tab.textContent = `🔔 Alarme (${triggered.length})`;
+}
+
+function updateAlertCurrentCells(record) {
+  ALERT_PARAMS.forEach(({key}) => {
+    const el = document.getElementById('acur-'+key);
+    if (!el) return;
+    const def = alertDefs[key];
+    const val = alertVal(key, def.unit, record);
+    if (val == null) { el.textContent='—'; el.className='alert-cur'; return; }
+    const gt = def.gt!==''?parseFloat(def.gt):null;
+    const lt = def.lt!==''?parseFloat(def.lt):null;
+    const hit = (gt!=null && val>gt) || (lt!=null && val<lt);
+    el.textContent = +val.toFixed(1);
+    el.className = 'alert-cur' + (hit?' hit':'');
+  });
+}
+
+function playAlertBeep() {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [880, 1108, 880].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime + i * 0.22;
+      gain.gain.setValueAtTime(0.28, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+      osc.start(t0); osc.stop(t0 + 0.18);
+    });
+  } catch(e) {}
+}
+
+function requestNotifPermission() {
+  if (!('Notification' in window)) { alert('Browser-Benachrichtigungen werden nicht unterstützt.'); return; }
+  Notification.requestPermission().then(p => {
+    if (p !== 'granted') alert('Berechtigung verweigert — Browser-Benachrichtigungen nicht möglich.');
+  });
+}
+
+// ── Alert: panel rendering ───────────────────
+function renderAlertsPanel() {
+  const tbody = document.getElementById('alert-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = ALERT_PARAMS.map(({key, label, opts}) => {
+    const def = alertDefs[key];
+    const unitCell = opts.length > 1
+      ? `<select onchange="alertDefs['${key}'].unit=this.value;saveAlerts()">${opts.map(([v,l])=>`<option value="${v}"${def.unit===v?' selected':''}>${l}</option>`).join('')}</select>`
+      : opts[0][1];
+    return `<tr id="alert-row-${key}" class="${def.en?'a-active':''}">
+      <td>${label}</td>
+      <td><button class="alert-en-btn ${def.en?'on':'off'}" onclick="toggleAlert('${key}',this)">${def.en?'EIN':'AUS'}</button></td>
+      <td><input type="number" id="agt-${key}" value="${def.gt}" placeholder="—" step="any" oninput="alertDefs['${key}'].gt=this.value;saveAlerts()"></td>
+      <td><input type="number" id="alt-${key}" value="${def.lt}" placeholder="—" step="any" oninput="alertDefs['${key}'].lt=this.value;saveAlerts()"></td>
+      <td>${unitCell}</td>
+      <td><span id="acur-${key}" class="alert-cur">—</span></td>
+    </tr>`;
+  }).join('');
+  // Restore checkboxes
+  const audioEl = document.getElementById('alert-audio');
+  const browserEl = document.getElementById('alert-browser');
+  if (audioEl)   audioEl.checked   = !!alertDefs._audio;
+  if (browserEl) browserEl.checked = !!alertDefs._browser;
+}
+
+function toggleAlert(key, btn) {
+  alertDefs[key].en = !alertDefs[key].en;
+  btn.textContent = alertDefs[key].en ? 'EIN' : 'AUS';
+  btn.classList.toggle('on',  alertDefs[key].en);
+  btn.classList.toggle('off', !alertDefs[key].en);
+  document.getElementById('alert-row-'+key)?.classList.toggle('a-active', alertDefs[key].en);
+  saveAlerts();
+}
+
+function renderAlertLog() {
+  const el = document.getElementById('alert-log');
+  if (!el) return;
+  if (!alertLog.length) {
+    el.innerHTML = '<span style="color:var(--text3);font-size:11px">Keine Alarme in dieser Session.</span>';
+    return;
+  }
+  el.innerHTML = alertLog.map(e =>
+    `<div class="al-entry"><span class="al-ts">${e.ts}</span><span class="al-msg">${e.label} ${e.cond} ${e.threshold} ${e.unit} — Wert: ${+e.val.toFixed(1)}</span></div>`
+  ).join('');
 }
 
 function setUnit(param, val, el) {
@@ -2973,6 +3279,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
       if(m && m[1]===param) btn.classList.toggle('active', m[2]===val);
     });
   });
+  // Restore saved alert settings
+  loadAlerts();
   const big=`@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:191:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.82:3013  RH:77  WI:1:?:0.3:S  GU:2:57  LD:?:0:--  CL:1ca14:0:0:2317:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:190:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.1  BA:1018.89:3013  RH:77  WI:1:?:0.3:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
