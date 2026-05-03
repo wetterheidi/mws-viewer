@@ -2252,6 +2252,7 @@ function setUnit(param, val, el) {
   el.closest('.unit-toggle').querySelectorAll('.unit-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   units[param]=val;
+  localStorage.setItem('mws-units', JSON.stringify(units));
   redrawMet();
 }
 
@@ -2962,6 +2963,16 @@ function clearAll() {
 
 // Auto-load sample data on page open (in paste field, not auto-rendered)
 window.addEventListener('DOMContentLoaded', ()=>{
+  // Restore saved unit preferences
+  const savedUnits = JSON.parse(localStorage.getItem('mws-units')||'{}');
+  Object.entries(savedUnits).forEach(([param, val]) => {
+    if(!(param in units)) return;
+    units[param] = val;
+    document.querySelectorAll('.unit-toggle .unit-btn').forEach(btn => {
+      const m = btn.getAttribute('onclick').match(/setUnit\('(\w+)','(\w+)'/);
+      if(m && m[1]===param) btn.classList.toggle('active', m[2]===val);
+    });
+  });
   const big=`@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:191:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.82:3013  RH:77  WI:1:?:0.3:S  GU:2:57  LD:?:0:--  CL:1ca14:0:0:2317:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:190:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.1  BA:1018.89:3013  RH:77  WI:1:?:0.3:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
