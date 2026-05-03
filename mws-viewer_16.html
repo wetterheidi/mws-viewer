@@ -1157,6 +1157,11 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
           <canvas id="chart-pw"></canvas>
           <div id="pw-legend" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;min-height:22px"></div>
         </div>
+        <!-- Zeile 7: Blitzsensor (ganze Breite) -->
+        <div class="chart-card wide tall">
+          <div class="chart-header"><span class="chart-title">Blitzsensor — Anzahl &amp; Distanz (mi)</span></div>
+          <canvas id="chart-ld"></canvas>
+        </div>
       </div>
     </div>
   </div>
@@ -2669,6 +2674,47 @@ function redrawMet() {
       scales:{
         x:{...baseChartOpts().scales.x,type:'category',labels:[...new Set(ceilData.map(d=>d.t))].sort()},
         y:{...baseChartOpts().scales.y,min:0,title:{display:true,text:`Höhe (${ceilUnit})`,color:C.tick(),font:{family:'Barlow Condensed'}}}
+      }
+    }
+  });
+
+  // Lightning
+  mkChart('chart-ld',{
+    type:'bar',
+    data:{labels:lbl,datasets:[
+      {
+        label:'Blitz Anzahl',
+        data:data.map(d=>d.ldCount??0),
+        backgroundColor:C.red()+'88',
+        borderColor:C.red(),
+        borderWidth:1,
+        yAxisID:'y',
+      },
+      {
+        label:'Distanz (mi)',
+        data:data.map(d=>d.ldDist!=null?d.ldDist:null),
+        type:'line',
+        borderColor:C.yellow(),
+        backgroundColor:'transparent',
+        pointRadius:3,
+        pointHoverRadius:5,
+        spanGaps:false,
+        yAxisID:'y2',
+      }
+    ]},
+    options:{...baseChartOpts(),
+      plugins:{...baseChartOpts().plugins,
+        legend:{display:true,labels:{color:C.legend(),font:{family:'Barlow Condensed',size:11}}}
+      },
+      scales:{
+        x:{...baseChartOpts().scales.x},
+        y:{...baseChartOpts().scales.y, min:0,
+           title:{display:true,text:'Anzahl',color:C.tick(),font:{family:'Barlow Condensed'}}},
+        y2:{position:'right', min:0,
+            ticks:{color:C.tick(),font:{family:'Share Tech Mono',size:10}},
+            grid:{drawOnChartArea:false},
+            border:{color:document.body.classList.contains('day-mode')?'#1a1f2e':'#30363d'},
+            title:{display:true,text:'Distanz (mi)',color:C.tick(),font:{family:'Barlow Condensed'}}}
       }
     }
   });
