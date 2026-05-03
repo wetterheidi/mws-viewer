@@ -1,0 +1,28 @@
+# Credentials — niemals einchecken
+mws_config.json
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Analysedaten und alte Versionen — gehören nicht in das Viewer-Repo
+*.csv
+*.png
+*.pdf
+260*
+Michel*
+MWS_TacMet_Vergleich.py
+MWS_CYYR_Statistik.py
+MWS-Military*
+Dateipfad*
+mws-viewer_14.html
+mws-viewer_15.html
+
+# Claude Code interne Dateien
+.claude/

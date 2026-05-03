@@ -1,0 +1,2988 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MWS Data Viewer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d1117;
+  --bg2: #161b22;
+  --bg3: #1c2430;
+  --border: #30363d;
+  --accent: #58a6ff;
+  --accent2: #3fb950;
+  --accent3: #f78166;
+  --accent4: #e3b341;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --text3: #6e7681;
+  --mono: 'Share Tech Mono', monospace;
+  --head: 'Barlow Condensed', sans-serif;
+  --body: 'Barlow', sans-serif;
+  --radius: 6px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+
+/* ── TAGESMODUS (Hochkontrast für Outdoor/Sonnenschein) ── */
+body.day-mode {
+  --bg:     #ffffff;
+  --bg2:    #f0f2f4;
+  --bg3:    #dde1e7;
+  --border: #1a1f2e;
+  --accent: #0047b3;
+  --accent2:#1a6e00;
+  --accent3:#b80000;
+  --accent4:#7a4d00;
+  --text:   #060a14;
+  --text2:  #1e2535;
+  --text3:  #3a4256;
+  --shadow: 0 4px 24px rgba(0,0,0,0.18);
+}
+body.day-mode table { border: 1px solid var(--border); }
+body.day-mode thead th { background: var(--bg3); color: var(--text2); border-bottom: 2px solid var(--border); }
+body.day-mode tbody tr:hover { background: rgba(0,71,179,0.07); }
+body.day-mode tbody td { border-bottom: 1px solid #c0c6d0; }
+body.day-mode .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+body.day-mode .tab { color: var(--text2); }
+body.day-mode .tab:hover { color: var(--text); }
+body.day-mode .btn-primary { background: var(--accent); color: #ffffff; font-weight: 700; }
+body.day-mode .btn-primary:hover { background: #003a94; }
+body.day-mode .btn-ghost { background: #ffffff; color: var(--text2); border: 1.5px solid var(--border); }
+body.day-mode .btn-ghost:hover { color: var(--text); background: var(--bg3); }
+body.day-mode .unit-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+body.day-mode .trf-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+body.day-mode .status-dot.ok  { background: #1a6e00; box-shadow: 0 0 6px #1a6e00; }
+body.day-mode .status-dot.warn{ background: #b84d00; }
+body.day-mode .info-card { border: 1.5px solid var(--border); }
+body.day-mode .info-card .value { color: var(--accent); }
+body.day-mode .chart-card { border: 1.5px solid var(--border); }
+body.day-mode .ctrl-group { border: 1.5px solid var(--border); }
+body.day-mode .offset-item input[type=number] { background: #ffffff; border: 1.5px solid var(--border); color: var(--text); }
+body.day-mode .tf-custom input[type=datetime-local] { background: #ffffff; border: 1.5px solid var(--border); color: var(--text); }
+body.day-mode #raw-input { background: #ffffff; border: 1.5px solid var(--border); color: var(--text); }
+body.day-mode .doc-section { border: 1.5px solid var(--border); }
+body.day-mode .doc-formula { border-color: var(--accent); background: var(--bg3); }
+body.day-mode .doc-algo-step { background: var(--bg3); border: 1px solid var(--border); }
+body.day-mode td.hilite { color: var(--accent); }
+body.day-mode td.ok    { color: var(--accent2); }
+body.day-mode td.warn  { color: #7a4d00; }
+body.day-mode td.bad   { color: var(--accent3); }
+/* Tagesmodus-Toggle-Button */
+#day-toggle {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 12px;
+  font-family: var(--head);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  color: var(--text2);
+  transition: all 0.15s;
+}
+#day-toggle:hover { color: var(--text); border-color: var(--text3); }
+body.day-mode #day-toggle {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+/* ── TOP BAR ── */
+header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+header .logo {
+  font-family: var(--head);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+header .logo span { color: var(--text2); font-weight: 300; }
+header .badge {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+}
+.header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* ── PASTE AREA ── */
+#paste-section {
+  padding: 20px 24px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+#paste-section label {
+  font-family: var(--head);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text2);
+  display: block;
+  margin-bottom: 6px;
+}
+#raw-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 70px;
+  max-height: 160px;
+  transition: border-color 0.2s;
+}
+#raw-input:focus { outline: none; border-color: var(--accent); }
+.paste-actions { display: flex; gap: 8px; margin-top: 8px; }
+button {
+  font-family: var(--head);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  border: none;
+  border-radius: var(--radius);
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary { background: var(--accent); color: #0d1117; }
+.btn-primary:hover { background: #79b8ff; }
+.btn-ghost { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: var(--text3); }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+/* ── TABS ── */
+#tab-bar {
+  display: flex;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  gap: 0;
+}
+.tab {
+  font-family: var(--head);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 14px 20px;
+  cursor: pointer;
+  color: var(--text2);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  user-select: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── MAIN CONTENT ── */
+#content { padding: 20px 24px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── TABLE ── */
+.data-table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+thead th {
+  background: var(--bg2);
+  color: var(--text2);
+  font-family: var(--head);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  white-space: nowrap;
+}
+tbody tr:hover { background: rgba(88,166,255,0.05); }
+tbody td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(48,54,61,0.5);
+  white-space: nowrap;
+  color: var(--text);
+}
+tbody td.mono { font-family: var(--mono); }
+tbody td.num { text-align: right; }
+tbody td.hilite { color: var(--accent); font-weight: 500; }
+tbody td.warn { color: var(--accent4); }
+tbody td.ok { color: var(--accent2); }
+tbody td.bad { color: var(--accent3); }
+
+/* ── STATION INFO GRID ── */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.info-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.info-card .label {
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+.info-card .value {
+  font-family: var(--mono);
+  font-size: 18px;
+  color: var(--accent);
+}
+.info-card .sub {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+/* ── CHARTS ── */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.chart-grid.full { grid-template-columns: 1fr; }
+.chart-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.chart-card.wide { grid-column: 1 / -1; }
+.chart-card .chart-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.chart-card .chart-title {
+  font-family: var(--head);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+.chart-card canvas { max-height: 180px; }
+.chart-card.tall canvas { max-height: 260px; }
+
+/* ── MET CONTROLS ── */
+.met-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+  align-items: flex-end;
+}
+.ctrl-group {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+.ctrl-group .ctrl-label {
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.unit-toggle { display: flex; gap: 4px; }
+.unit-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.unit-btn.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+.offset-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.offset-item { display: flex; align-items: center; gap: 6px; }
+.offset-item label { font-size: 11px; color: var(--text2); font-family: var(--head); font-weight: 600; letter-spacing: 0.5px; }
+.offset-item input[type=number] {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-family: var(--mono);
+  font-size: 12px;
+  width: 70px;
+}
+.offset-item input:focus { outline: none; border-color: var(--accent); }
+
+/* ── STATUS ── */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  padding: 6px 0 14px;
+}
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); }
+.status-dot.ok { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+.status-dot.warn { background: var(--accent4); }
+
+/* ── WIND ROSE ── */
+#windrose-canvas { width: 200px !important; height: 200px !important; max-height: 200px; }
+
+/* ── CEIL CHART ── */
+.ceil-dots {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.ceil-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ceil-time { color: var(--text3); width: 95px; }
+.ceil-bars { display: flex; gap: 3px; }
+.ceil-bar {
+  width: 34px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--bg3);
+  position: relative;
+  overflow: hidden;
+}
+.ceil-bar .fill {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: linear-gradient(90deg, #58a6ff44, #58a6ff);
+}
+.ceil-val { color: var(--text2); font-size: 9px; }
+
+/* ── PRESENT WEATHER BADGES ── */
+.pw-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+.pw-fg   { background: rgba(88,166,255,0.15); color:#79c0ff; border:1px solid rgba(88,166,255,0.3); }
+.pw-fzfg { background: rgba(88,166,255,0.25); color:#a5d6ff; border:1px solid rgba(88,166,255,0.5); }
+.pw-br   { background: rgba(139,148,158,0.15); color:#8b949e; border:1px solid rgba(139,148,158,0.3); }
+.pw-hz   { background: rgba(227,179,65,0.12); color:#e3b341; border:1px solid rgba(227,179,65,0.25); }
+.pw-ra   { background: rgba(63,185,80,0.12); color:#56d364; border:1px solid rgba(63,185,80,0.25); }
+.pw-dz   { background: rgba(63,185,80,0.08); color:#3fb950; border:1px solid rgba(63,185,80,0.2); }
+.pw-fzra { background: rgba(121,192,255,0.15); color:#79c0ff; border:1px solid rgba(121,192,255,0.4); }
+.pw-fzdz { background: rgba(121,192,255,0.1); color:#58a6ff; border:1px solid rgba(121,192,255,0.3); }
+.pw-none { color: var(--text3); font-family: var(--mono); }
+.pw-unknown { background: rgba(247,129,102,0.1); color:#f78166; border:1px solid rgba(247,129,102,0.3); }
+.pw-sn   { background: rgba(200,220,255,0.15); color:#cae8ff; border:1px solid rgba(200,220,255,0.35); }
+.pw-sn-  { background: rgba(200,220,255,0.10); color:#b0d4f0; border:1px solid rgba(200,220,255,0.2); }
+.pw-sn+  { background: rgba(180,210,255,0.25); color:#d0eaff; border:1px solid rgba(180,210,255,0.5); }
+.pw-ra-  { background: rgba(63,185,80,0.08);  color:#3fb950; border:1px solid rgba(63,185,80,0.2);  }
+.pw-ra+  { background: rgba(63,185,80,0.25);  color:#7ee787; border:1px solid rgba(63,185,80,0.5);  }
+.pw-ts   { background: rgba(247,129,102,0.2); color:#ffa657; border:1px solid rgba(247,129,102,0.5); }
+.pw-vcts { background: rgba(227,179,65,0.15); color:#e3b341; border:1px solid rgba(227,179,65,0.35); }
+
+/* ── EMPTY STATE ── */
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text3);
+}
+.empty .icon { font-size: 40px; margin-bottom: 10px; }
+.empty p { font-family: var(--head); font-size: 14px; letter-spacing: 1px; }
+
+/* ── DOKUMENTATION ── */
+.doc-wrap {
+  max-width: 900px;
+  margin: 0 auto;
+  padding-bottom: 40px;
+}
+.doc-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  margin-bottom: 16px;
+}
+.doc-h1 {
+  font-family: var(--head);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.doc-lead {
+  color: var(--text2);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.doc-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.doc-meta-item {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.doc-meta-label {
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.doc-meta-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+}
+.doc-h2 {
+  font-family: var(--head);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.doc-h3 {
+  font-family: var(--head);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 18px 0 8px;
+}
+.doc-section p {
+  color: var(--text2);
+  line-height: 1.65;
+  font-size: 13px;
+  margin-bottom: 8px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.doc-section em { color: var(--text); font-style: italic; }
+.doc-section code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--accent2);
+}
+.doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.doc-table thead th {
+  background: var(--bg3);
+  color: var(--text3);
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.doc-table tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(48,54,61,0.5);
+  color: var(--text2);
+  vertical-align: top;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.doc-table tbody tr:last-child td { border-bottom: none; }
+.doc-table tbody td code {
+  font-size: 11px;
+}
+.doc-formula {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin: 8px 0 12px;
+}
+.doc-formula-title {
+  font-family: var(--head);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+.doc-formula code {
+  display: block;
+  margin: 4px 0;
+  font-size: 13px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent2);
+}
+.doc-formula-note {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.5;
+}
+.doc-callout {
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.doc-callout-warn {
+  background: rgba(227,179,65,0.08);
+  border: 1px solid rgba(227,179,65,0.3);
+  color: var(--text2);
+}
+.doc-callout-warn strong { color: var(--accent4); }
+.doc-algo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+.doc-algo-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.doc-algo-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0d1117;
+  font-family: var(--head);
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.doc-algo-body {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  flex: 1;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.doc-algo-body strong { color: var(--text); }
+.doc-algo-body code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--accent2);
+}
+
+/* ── METAR TAB ── */
+.metar-station-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.metar-station-row label {
+  font-family: var(--head);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+#metar-icao {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 5px 10px;
+  width: 80px;
+  text-transform: uppercase;
+}
+#metar-icao:focus { outline: none; border-color: var(--accent); }
+body.day-mode #metar-icao { background: #ffffff; border-color: var(--border); }
+.metar-hint { font-size: 11px; color: var(--text3); font-family: var(--body); }
+.metar-latest {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+.metar-latest .ml-label {
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.metar-string-big {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.3px;
+  line-height: 1.8;
+  word-break: break-all;
+}
+.metar-table-wrap { overflow-x: auto; }
+.metar-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.metar-table thead th {
+  background: var(--bg2);
+  color: var(--text2);
+  font-family: var(--head);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.metar-table tbody tr:hover { background: rgba(88,166,255,0.05); }
+.metar-table tbody td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(48,54,61,0.5);
+  white-space: nowrap;
+  color: var(--text);
+}
+body.day-mode .metar-table tbody td { border-bottom: 1px solid #c0c6d0; }
+.metar-string-cell { white-space: pre; letter-spacing: 0.2px; }
+/* METAR part colour spans */
+.mt-id   { color: var(--accent); font-weight: 500; }
+.mt-time { color: var(--text2); }
+.mt-wind { color: #58a6ff; }
+.mt-vis  { color: var(--accent2); }
+.mt-wx   { color: var(--accent4); }
+.mt-cld  { color: #79c0ff; }
+.mt-tmp  { color: var(--accent3); }
+.mt-qnh  { color: #d2a8ff; }
+body.day-mode .mt-wind { color: #0047b3; }
+body.day-mode .mt-cld  { color: #005fa3; }
+body.day-mode .mt-qnh  { color: #6a0dad; }
+.btn-copy-metar { font-size: 11px; padding: 3px 10px; }
+
+@media (max-width: 700px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  .info-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── DATA SOURCE SECTION ── */
+#source-section {
+  padding: 12px 24px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.source-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.source-label {
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  min-width: 80px;
+}
+#current-file {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent2);
+  flex: 1;
+  min-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qtm-select {
+  background: var(--bg3);
+  color: var(--text1);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  min-width: 220px;
+  max-width: 340px;
+}
+.avail-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  padding: 3px 0 2px;
+}
+#avail-text { flex: 1; }
+#poll-status { color: var(--text3); font-size: 10px; margin-left: 12px; }
+.paste-details { margin-top: 8px; }
+.paste-details summary {
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  cursor: pointer;
+  user-select: none;
+  padding: 3px 0;
+  list-style: none;
+}
+.paste-details summary::before { content: '▸ '; }
+.paste-details[open] summary::before { content: '▾ '; }
+.paste-details summary:hover { color: var(--text2); }
+.paste-details[open] summary { color: var(--text2); margin-bottom: 6px; }
+
+/* ── TIME FILTER BAR ── */
+#time-filter-bar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tf-label {
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.tf-rolling { display: flex; gap: 4px; }
+.trf-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-family: var(--head);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.trf-btn:hover { color: var(--text); border-color: var(--text3); }
+.trf-btn.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+.tf-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+.tf-custom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tfc-label {
+  font-family: var(--head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.tf-custom input[type=datetime-local] {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color-scheme: dark;
+}
+.tf-custom input[type=datetime-local]:focus { outline: none; border-color: var(--accent); }
+.tf-append-lbl {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: var(--head);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.tf-append-lbl input { accent-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MWS <span>Viewer</span></div>
+  <div class="badge">Military Series</div>
+  <div class="badge">Intellisense</div>
+  <div class="header-right">
+    <span id="record-count" style="font-family:var(--mono);font-size:11px;color:var(--text3);">— records</span>
+    <button id="day-toggle" onclick="toggleDayMode()" title="Tagesmodus für Outdoor-Nutzung">☀ Tagesmodus</button>
+  </div>
+</header>
+
+<div id="source-section">
+  <div class="source-row">
+    <span class="source-label">Datenquelle</span>
+    <button class="btn-primary btn-sm" onclick="openFilePicker()">📂 CSV öffnen</button>
+    <input type="file" id="file-input" accept=".csv" style="display:none" onchange="onFileInput(event)">
+    <button class="btn-ghost btn-sm" onclick="document.getElementById('file-input').click()" title="Fallback für Browser ohne File System Access API">Datei wählen</button>
+    <span id="current-file">Keine Datei geladen</span>
+    <button class="btn-ghost btn-sm" id="reload-btn" style="display:none" onclick="reloadFile()">↻ Neu laden</button>
+    <button class="btn-ghost btn-sm" onclick="clearAll()" style="margin-left:auto">✕ Leeren</button>
+  </div>
+  <div class="source-row" id="qtm-row">
+    <span class="source-label">Quantimet</span>
+    <select id="qtm-device" class="qtm-select"><option value="">— Gerät wählen —</option></select>
+    <button class="btn-ghost btn-sm" onclick="loadQuantimetDevices()" title="Geräteliste aktualisieren">↻ Geräteliste</button>
+    <button class="btn-primary btn-sm" onclick="loadFromQuantimet()">🌐 Laden</button>
+    <span id="qtm-status" style="font-family:var(--mono);font-size:11px;color:var(--text3);"></span>
+  </div>
+  <div class="avail-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="avail-text">Keine Daten geladen — CSV öffnen oder Rohdaten einfügen</span>
+    <span id="poll-status"></span>
+  </div>
+  <details class="paste-details">
+    <summary>Rohdaten manuell einfügen (@0deN-Format)</summary>
+    <textarea id="raw-input" placeholder="@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39 ..."></textarea>
+    <div class="paste-actions">
+      <button class="btn-primary" onclick="loadData()">▶ Laden & Analysieren</button>
+      <button class="btn-ghost" onclick="loadSample()">Beispieldaten laden</button>
+    </div>
+  </details>
+</div>
+
+<div id="tab-bar">
+  <div class="tab active" onclick="switchTab('table')">📋 Rohtabelle</div>
+  <div class="tab" onclick="switchTab('station')">📡 Station</div>
+  <div class="tab" onclick="switchTab('met')">🌤 Meteorologie</div>
+  <div class="tab" onclick="switchTab('metar')">✈️ METAR</div>
+  <div class="tab" onclick="switchTab('docs')">📖 Dokumentation</div>
+</div>
+
+<div id="time-filter-bar">
+  <span class="tf-label">Zeitraum</span>
+  <div class="tf-rolling">
+    <button class="trf-btn active" id="trf-all" onclick="setRolling(0, this)">Alle</button>
+    <button class="trf-btn" onclick="setRolling(6, this)">6 Std</button>
+    <button class="trf-btn" onclick="setRolling(12, this)">12 Std</button>
+    <button class="trf-btn" onclick="setRolling(24, this)">24 Std</button>
+  </div>
+  <div class="tf-sep"></div>
+  <div class="tf-custom">
+    <span class="tfc-label">Benutzerdefiniert</span>
+    <input type="datetime-local" id="tf-from" title="Von (UTC)" onchange="setCustomRange()">
+    <span style="color:var(--text3);font-size:11px;font-family:var(--head)">bis</span>
+    <input type="datetime-local" id="tf-to" title="Bis (UTC)" onchange="setCustomRange()">
+    <label class="tf-append-lbl" title="Neu einlaufende Daten beim Auto-Polling anhängen">
+      <input type="checkbox" id="tf-append" checked> Neue Daten anhängen
+    </label>
+  </div>
+</div>
+
+<div id="content">
+
+  <!-- TAB 1: TABLE -->
+  <div class="tab-panel active" id="panel-table">
+    <div class="empty" id="empty-table">
+      <div class="icon">📭</div>
+      <p>Keine Daten geladen — Pakete oben einfügen und auf "Laden" klicken</p>
+    </div>
+    <div class="data-table-wrap" id="table-wrap" style="display:none"></div>
+  </div>
+
+  <!-- TAB 2: STATION -->
+  <div class="tab-panel" id="panel-station">
+    <div class="empty" id="empty-station">
+      <div class="icon">📭</div>
+      <p>Keine Daten geladen</p>
+    </div>
+    <div id="station-content" style="display:none">
+      <div class="info-grid" id="station-cards"></div>
+      <div class="chart-grid">
+        <div class="chart-card wide">
+          <div class="chart-header"><span class="chart-title">Batteriespannung über Zeit</span></div>
+          <canvas id="chart-batt"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><span class="chart-title">Kompassausrichtung</span></div>
+          <canvas id="chart-orient"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><span class="chart-title">Neigung (Tilt) °</span></div>
+          <canvas id="chart-tilt"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: MET -->
+  <div class="tab-panel" id="panel-met">
+    <div class="empty" id="empty-met">
+      <div class="icon">📭</div>
+      <p>Keine Daten geladen</p>
+    </div>
+    <div id="met-content" style="display:none">
+
+      <div class="met-controls">
+        <div class="ctrl-group">
+          <div class="ctrl-label">Temperatur</div>
+          <div class="unit-toggle">
+            <button class="unit-btn active" onclick="setUnit('temp','C',this)">°C</button>
+            <button class="unit-btn" onclick="setUnit('temp','F',this)">°F</button>
+            <button class="unit-btn" onclick="setUnit('temp','K',this)">K</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-label">Druck</div>
+          <div class="unit-toggle">
+            <button class="unit-btn active" onclick="setUnit('pres','hPa',this)">hPa</button>
+            <button class="unit-btn" onclick="setUnit('pres','inHg',this)">inHg</button>
+            <button class="unit-btn" onclick="setUnit('pres','mmHg',this)">mmHg</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-label">Wind</div>
+          <div class="unit-toggle">
+            <button class="unit-btn active" onclick="setUnit('wind','kt',this)">kn</button>
+            <button class="unit-btn" onclick="setUnit('wind','ms',this)">m/s</button>
+            <button class="unit-btn" onclick="setUnit('wind','kmh',this)">km/h</button>
+            <button class="unit-btn" onclick="setUnit('wind','mph',this)">mph</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-label">Sicht</div>
+          <div class="unit-toggle">
+            <button class="unit-btn active" onclick="setUnit('vis','mi',this)">mi</button>
+            <button class="unit-btn" onclick="setUnit('vis','km',this)">km</button>
+            <button class="unit-btn" onclick="setUnit('vis','m',this)">m</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-label">Wolkenhöhe</div>
+          <div class="unit-toggle">
+            <button class="unit-btn active" onclick="setUnit('ceil','m',this)">m</button>
+            <button class="unit-btn" onclick="setUnit('ceil','ft',this)">ft</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-label">Niederschlag</div>
+          <div class="unit-toggle">
+            <button class="unit-btn active" onclick="setUnit('precip','inh',this)">in/h</button>
+            <button class="unit-btn" onclick="setUnit('precip','mmh',this)">mm/h</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="met-controls">
+        <div class="ctrl-group">
+          <div class="ctrl-label">Lineare Offsets (Korrektur addiert auf Rohwert)</div>
+          <div class="offset-row">
+            <div class="offset-item">
+              <label>Temp</label>
+              <input type="number" id="off-temp" value="0" step="0.1" onchange="redrawMet()">
+              <span style="font-size:11px;color:var(--text3)">°C</span>
+            </div>
+            <div class="offset-item">
+              <label>Druck</label>
+              <input type="number" id="off-pres" value="0" step="0.1" onchange="redrawMet()">
+              <span style="font-size:11px;color:var(--text3)">hPa</span>
+            </div>
+            <div class="offset-item">
+              <label>Feuchte</label>
+              <input type="number" id="off-rh" value="0" step="1" onchange="redrawMet()">
+              <span style="font-size:11px;color:var(--text3)">%</span>
+            </div>
+            <div class="offset-item">
+              <label>Wind</label>
+              <input type="number" id="off-wind" value="0" step="0.1" onchange="redrawMet()">
+              <span style="font-size:11px;color:var(--text3)">kn</span>
+            </div>
+            <div class="offset-item">
+              <label>Winddir</label>
+              <input type="number" id="off-wdir" value="0" step="1" min="-359" max="359" onchange="redrawMet()">
+              <span style="font-size:11px;color:var(--text3)">°</span>
+            </div>
+            <div class="offset-item">
+              <label>Sicht</label>
+              <input type="number" id="off-vis" value="0" step="0.1" onchange="redrawMet()">
+              <span style="font-size:11px;color:var(--text3)">mi</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <!-- Zeile 1: Temperatur+Taupunkt (breit) | Druck | Feuchte -->
+        <div class="chart-card wide tall">
+          <div class="chart-header"><span class="chart-title" id="title-temp">Lufttemperatur &amp; Taupunkt (°C)</span></div>
+          <canvas id="chart-temp"></canvas>
+        </div>
+        <div class="chart-card tall">
+          <div class="chart-header"><span class="chart-title" id="title-pres">Luftdruck (hPa)</span></div>
+          <canvas id="chart-pres"></canvas>
+        </div>
+        <div class="chart-card tall">
+          <div class="chart-header"><span class="chart-title">Relative Feuchte (%)</span></div>
+          <canvas id="chart-rh"></canvas>
+        </div>
+        <!-- Zeile 2: Wind (breit) -->
+        <div class="chart-card wide tall">
+          <div class="chart-header"><span class="chart-title" id="title-wind">Wind &amp; Böen (kn)</span></div>
+          <canvas id="chart-wind"></canvas>
+        </div>
+        <!-- Zeile 3: Windrichtung (ganze Breite) -->
+        <div class="chart-card wide tall">
+          <div class="chart-header"><span class="chart-title">Windrichtung (°)</span></div>
+          <canvas id="chart-wdir"></canvas>
+        </div>
+        <!-- Zeile 4: Ceilometer (ganze Breite) -->
+        <div class="chart-card wide tall">
+          <div class="chart-header"><span class="chart-title" id="title-ceil">Ceilometer — Wolkenhöhen (m)</span></div>
+          <canvas id="chart-ceil"></canvas>
+        </div>
+        <!-- Zeile 5: Sichtweite | Niederschlag -->
+        <div class="chart-card tall">
+          <div class="chart-header"><span class="chart-title" id="title-vis">Sichtweite (mi)</span></div>
+          <canvas id="chart-vis"></canvas>
+        </div>
+        <div class="chart-card tall">
+          <div class="chart-header"><span class="chart-title" id="title-precip">Niederschlag (in/h)</span></div>
+          <canvas id="chart-precip"></canvas>
+        </div>
+        <!-- Zeile 6: Present Weather (ganze Breite) -->
+        <div class="chart-card wide">
+          <div class="chart-header"><span class="chart-title">Present Weather &amp; Feuchtesensor</span></div>
+          <canvas id="chart-pw"></canvas>
+          <div id="pw-legend" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;min-height:22px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- TAB 4: METAR -->
+  <div class="tab-panel" id="panel-metar">
+    <div class="empty" id="empty-metar">
+      <div class="icon">📭</div>
+      <p>Keine Daten geladen</p>
+    </div>
+    <div id="metar-content" style="display:none">
+      <div class="metar-station-row">
+        <label for="metar-icao">ICAO-Kennung</label>
+        <input type="text" id="metar-icao" maxlength="4" value="ZZZZ" placeholder="ZZZZ"
+               oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,''); renderMetar(parsedData);"
+               title="Vierstellige ICAO-Stationskennung (z.B. EDAH). Ohne offizielle Kennung ZZZZ verwenden.">
+        <span class="metar-hint">Vierstellige ICAO-Kennung — ZZZZ für unbekannte / temporäre Station</span>
+      </div>
+      <div class="metar-latest" id="metar-latest-box">
+        <div class="ml-label">
+          Aktuellstes METAR
+          <button class="btn-ghost btn-sm btn-copy-metar" onclick="copyLatestMETAR()">Kopieren</button>
+        </div>
+        <div class="metar-string-big" id="metar-latest-str">—</div>
+      </div>
+      <div class="metar-table-wrap">
+        <table class="metar-table">
+          <thead>
+            <tr>
+              <th>Zeit (UTC)</th>
+              <th>METAR</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="metar-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: DOKUMENTATION -->
+  <div class="tab-panel" id="panel-docs">
+    <div class="doc-wrap">
+
+      <div class="doc-section">
+        <h1 class="doc-h1">MWS Viewer — Dokumentation</h1>
+        <p class="doc-lead">Webanwendung zur Visualisierung und Analyse von Rohdatenstrings des Micro Weather Station (MWS®) Military Series von Intellisense Systems Inc. Entwickelt für Flugwetterberater ohne Programmierkenntnisse.</p>
+        <div class="doc-meta-grid">
+          <div class="doc-meta-item"><span class="doc-meta-label">Geräte</span><span class="doc-meta-val">MWS M525, MWS M625</span></div>
+          <div class="doc-meta-item"><span class="doc-meta-label">Datenformat</span><span class="doc-meta-val">Quantimet ASCII-String</span></div>
+          <div class="doc-meta-item"><span class="doc-meta-label">Referenz User Guide</span><span class="doc-meta-val">UG-MWS-MIL-05-2021</span></div>
+          <div class="doc-meta-item"><span class="doc-meta-label">Kommunikation</span><span class="doc-meta-val">Iridium SBD, RS-232/USB</span></div>
+        </div>
+      </div>
+
+      <div class="doc-section">
+        <h2 class="doc-h2">Bedienung</h2>
+        <p>Rohdatenpakete im Textfeld oben einfügen (Zeilenweise oder semikolongetrennt) und <em>Laden &amp; Analysieren</em> klicken. Die Anwendung verarbeitet beliebig viele Pakete gleichzeitig und sortiert sie chronologisch.</p>
+        <h3 class="doc-h3">Tabs</h3>
+        <table class="doc-table">
+          <thead><tr><th>Tab</th><th>Inhalt</th></tr></thead>
+          <tbody>
+            <tr><td>📋 Rohtabelle</td><td>Alle geparsten Parameter als Tabelle, einheitensensitiv. Farbkodierung: Batterie (grün/gelb), Temperatur (blau), fehlende Werte (—).</td></tr>
+            <tr><td>📡 Station</td><td>Stationsfixe (GPS, Kompass, Tilt), Batteriespannungsverlauf, Ceilometer-Rohdaten.</td></tr>
+            <tr><td>🌤 Meteorologie</td><td>Zeitreihen aller meteorologischen Parameter. Einheitenumschaltung und lineare Offset-Korrektur interaktiv.</td></tr>
+            <tr><td>✈️ METAR</td><td>Automatisch erzeugte METAR-Meldungen im europäischen ICAO-Format für jeden Datensatz. Frei eingebbare ICAO-Kennung, farbkodierte Ausgabe, Kopier-Funktion je Zeile.</td></tr>
+            <tr><td>📖 Dokumentation</td><td>Diese Seite.</td></tr>
+          </tbody>
+        </table>
+        <h3 class="doc-h3">Einheitenumschaltung</h3>
+        <table class="doc-table">
+          <thead><tr><th>Parameter</th><th>Verfügbare Einheiten</th><th>Basiseinheit (intern)</th></tr></thead>
+          <tbody>
+            <tr><td>Temperatur</td><td>°C, °F, K</td><td>°C</td></tr>
+            <tr><td>Luftdruck</td><td>hPa, inHg, mmHg</td><td>hPa</td></tr>
+            <tr><td>Wind / Böen</td><td>kn, m/s, km/h, mph</td><td>kn</td></tr>
+            <tr><td>Sichtweite</td><td>mi, km, m</td><td>mi (statute miles)</td></tr>
+            <tr><td>Wolkenhöhe</td><td>m, ft</td><td>m</td></tr>
+            <tr><td>Niederschlag</td><td>in/h, mm/h</td><td>in/h</td></tr>
+          </tbody>
+        </table>
+        <h3 class="doc-h3">Offset-Korrektur</h3>
+        <p>Lineare Offsets werden auf den Rohwert addiert, bevor die Einheitenkonvertierung erfolgt. Ein Windrichtungs-Offset wird modulo 360° gewrappt. Alle Offsets beeinflussen Tabelle und Charts gleichzeitig.</p>
+      </div>
+
+      <div class="doc-section">
+        <h2 class="doc-h2">Paketformat (Quantimet ASCII)</h2>
+        <p>Jedes Datenpaket beginnt mit <code>@0</code> und enthält Felder der Form <code>TAG:Wert1:Wert2…</code>, getrennt durch Leerzeichen. Fehlende oder ungültige Werte werden als <code>?</code> oder <code>--</code> übermittelt.</p>
+        <table class="doc-table">
+          <thead><tr><th>Tag</th><th>Name</th><th>Felder (doppelpunktgetrennt)</th></tr></thead>
+          <tbody>
+            <tr><td><code>N</code></td><td>Nachrichtennummer</td><td>Msg-Nr. (0–255, rotiert ab 16) : Zyklen</td></tr>
+            <tr><td><code>B</code></td><td>Batterie</td><td>Spannung (V) : Betriebsmodus : Imaging-Hex : Konfig-Hex : Betriebstage : Befehlsschlüssel</td></tr>
+            <tr><td><code>T</code></td><td>GPS-Zeit</td><td>YY/MM/DD,HH:MM:SS UTC (führendes „-" = kein GPS-Sync)</td></tr>
+            <tr><td><code>LA / LO</code></td><td>GPS-Position</td><td>Dezimalgrad (5 Nachkommastellen), „?" wenn deaktiviert</td></tr>
+            <tr><td><code>EL</code></td><td>GPS-Elevation</td><td>Meter : VDOP-Code (a–z)</td></tr>
+            <tr><td><code>OR</code></td><td>Ausrichtung</td><td>Kompass (°mag) : Tilt (°) : Tiltrichtung (°)</td></tr>
+            <tr><td><code>TA</code></td><td>Lufttemperatur</td><td>°C (1 Dezimale)</td></tr>
+            <tr><td><code>BA</code></td><td>Luftdruck</td><td>hPa (2 Dezimale) : Altimeter (inHg×100)</td></tr>
+            <tr><td><code>RH</code></td><td>Relative Feuchte</td><td>% (0–99)</td></tr>
+            <tr><td><code>WI</code></td><td>Wind</td><td>Mittl. Stärke (kn) : Richtung (°) : Stärke (m/s) : Himmelsrichtung</td></tr>
+            <tr><td><code>GU</code></td><td>Böen</td><td>Böenstärke (kn) : Richtung (°)</td></tr>
+            <tr><td><code>LD</code></td><td>Blitz</td><td>Distanz (NM) : Anzahl 5-Min-Intervalle : Zeitstempel (a–l)</td></tr>
+            <tr><td><code>CL</code></td><td>Ceilometer</td><td>Status-Code : Wolkenhöhe 1–4 (m), 0 = keine Wolke</td></tr>
+            <tr><td><code>PW</code></td><td>Present Weather</td><td>Niederschlag (in/h) : Disdrometer (0–999) : Spare : Zeitstempel : Accum% : Sicht-mV : Kalibrierungs-mV</td></tr>
+            <tr><td><code>VI</code></td><td>Sichtweite</td><td>Statute Miles (berechneter Wert aus Sicht-mV)</td></tr>
+            <tr><td><code>XA</code></td><td>Rohdaten Sensoren</td><td>Temp intern : Temp extern : Temp Barometer : I²C-Fehler</td></tr>
+            <tr><td><code>XD</code></td><td>Systemdiagnostik</td><td>Diagnosewerte (intern)</td></tr>
+          </tbody>
+        </table>
+        <h3 class="doc-h3">Betriebsmodi (B-Feld, Feld 2)</h3>
+        <table class="doc-table">
+          <thead><tr><th>Wert</th><th>Modus</th><th>Abtastung</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>1-Stunde (Standard)</td><td>10× 10-s-Proben in letzten 10 min, gemittelt</td></tr>
+            <tr><td>2</td><td>20 Minuten</td><td>10× 10-s-Proben in letzten 10 min, gemittelt</td></tr>
+            <tr><td>3</td><td>5 Minuten</td><td>Einzel-10-s-Probe</td></tr>
+            <tr><td>4</td><td>1 Minute</td><td>Einzel-10-s-Probe</td></tr>
+            <tr><td>5</td><td>20 Sekunden</td><td>Einzel-10-s-Probe (reduzierte Blitzsensitivität)</td></tr>
+            <tr><td>6</td><td>10 Sekunden</td><td>Einzel-10-s-Probe</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="doc-section">
+        <h2 class="doc-h2">Meteorologische Formeln</h2>
+
+        <h3 class="doc-h3">Taupunkt</h3>
+        <p>Berechnung nach der Magnus-Formel mit den Koeffizienten von <strong>Alduchov &amp; Eskridge (1996)</strong>, gültig von −40 °C bis +60 °C. Gemäß WMO-Empfehlung werden zwei Parametersätze je nach Vorzeichen der Temperatur verwendet:</p>
+        <div class="doc-formula">
+          <div class="doc-formula-title">Magnus-Formel (Alduchov &amp; Eskridge 1996)</div>
+          <code>γ(T, RH) = ln(RH/100) + b·T / (c + T)</code><br>
+          <code>T<sub>d</sub> = c·γ / (b − γ)</code>
+          <div class="doc-formula-table">
+            <table class="doc-table" style="margin-top:10px">
+              <thead><tr><th>Bereich</th><th>b</th><th>c</th><th>Referenzfläche</th></tr></thead>
+              <tbody>
+                <tr><td>T ≥ 0 °C</td><td>17,368</td><td>238,88 °C</td><td>Über Wasser</td></tr>
+                <tr><td>T &lt; 0 °C</td><td>17,966</td><td>247,15 °C</td><td>Über Eis (WMO)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="doc-formula-note">Typischer Fehler: &lt; 0,1 °C im gesamten meteorologischen Bereich. Die Unterscheidung Wasser/Eis ist für unterkühlte Situationen (Eisnebel, Frost) relevant.</div>
+        </div>
+
+        <h3 class="doc-h3">Einheitenkonvertierungen</h3>
+        <table class="doc-table">
+          <thead><tr><th>Parameter</th><th>Formel</th></tr></thead>
+          <tbody>
+            <tr><td>°C → °F</td><td>T(°F) = T(°C) × 9/5 + 32</td></tr>
+            <tr><td>°C → K</td><td>T(K) = T(°C) + 273,15</td></tr>
+            <tr><td>hPa → inHg</td><td>p(inHg) = p(hPa) × 0,029530</td></tr>
+            <tr><td>hPa → mmHg</td><td>p(mmHg) = p(hPa) × 0,750064</td></tr>
+            <tr><td>kn → m/s</td><td>v(m/s) = v(kn) × 0,514444</td></tr>
+            <tr><td>kn → km/h</td><td>v(km/h) = v(kn) × 1,852</td></tr>
+            <tr><td>kn → mph</td><td>v(mph) = v(kn) × 1,150779</td></tr>
+            <tr><td>mi → km</td><td>d(km) = d(mi) × 1,609344</td></tr>
+            <tr><td>m → ft</td><td>h(ft) = h(m) × 3,280840</td></tr>
+            <tr><td>in/h → mm/h</td><td>r(mm/h) = r(in/h) × 25,4</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="doc-section">
+        <h2 class="doc-h2">Algorithmus: Signifikantes Wetter (Present Weather)</h2>
+
+        <div class="doc-callout doc-callout-warn">
+          <strong>Hinweis zur Genauigkeit:</strong> Da der MWS-Rohdatenstring kein explizites Present-Weather-Feld enthält, wird das signifikante Wetter aus mehreren Sensorwerten abgeleitet. Der Algorithmus orientiert sich am <strong>WMO Guide to Instruments and Methods of Observation (Nr. 8)</strong> sowie den offiziellen Quantimet-Intensitätsschwellen. Validiert gegen 72 METAR-Referenzpunkte: <strong>67/72 korrekt (93 %)</strong>. Die 5 verbleibenden Abweichungen sind auf einen mutmaßlichen Persistenzfilter bei Intellisense zurückzuführen, der aus dem String nicht rekonstruierbar ist.
+        </div>
+
+        <h3 class="doc-h3">Verwendete Eingabeparameter</h3>
+        <table class="doc-table">
+          <thead><tr><th>Parameter</th><th>Tag/Feld</th><th>Bedeutung im Algorithmus</th></tr></thead>
+          <tbody>
+            <tr><td><code>VI</code></td><td>VI-Tag (mi)</td><td>Primäres Sichtweiten-Kriterium für FG/BR/HZ</td></tr>
+            <tr><td><code>accumPct</code></td><td>PW-Feld 5 (0–99)</td><td>Optischer Moisture-Sensor (Kondensation auf Linse). <em>Nicht</em> identisch mit rel. Feuchte (RH). Differenziert BR von HZ zuverlässig, da RH bei dieser Station bei allen Phänomenen 73–77 % beträgt.</td></tr>
+            <tr><td><code>RH</code></td><td>RH-Tag (%)</td><td>Sekundärer Feucht-Diskriminator: RH ≥ 80 % → BR (WMO), RH &lt; 80 % → HZ</td></tr>
+            <tr><td><code>precipInH</code></td><td>PW-Feld 1 (in/h)</td><td>Primärer Niederschlagsindikator (Tropfenzähler)</td></tr>
+            <tr><td><code>disdr</code></td><td>PW-Feld 2 (0–999)</td><td>Disdrometer-Peakwert. Werte ≤ 300 gelten als Sensorrauschen und werden ignoriert.</td></tr>
+            <tr><td><code>TA</code></td><td>TA-Tag (°C)</td><td>Bestimmt Aggregatzustand: &lt; −2 °C → Schnee; −2–0 °C → gefrierender Regen; ≥ 0 °C → Regen</td></tr>
+            <tr><td><code>ldDist / ldCount</code></td><td>LD-Tag</td><td>Blitzdistanz (NM) und Anzahl Detektionsintervalle für TS/VCTS</td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="doc-h3">Entscheidungslogik (Reihenfolge)</h3>
+        <div class="doc-algo">
+          <div class="doc-algo-step">
+            <div class="doc-algo-num">1</div>
+            <div class="doc-algo-body">
+              <strong>Niederschlag prüfen</strong><br>
+              <code>hasPrecip = (precipInH &gt; 0 AND disdr &gt; 300) OR precipInH &gt; 0,5</code><br>
+              Disdrometer-Werte ≤ 300 werden als Rauschen verworfen (empirisch aus Referenzdaten).
+            </div>
+          </div>
+          <div class="doc-algo-step">
+            <div class="doc-algo-num">2</div>
+            <div class="doc-algo-body">
+              <strong>Bei Niederschlag + VI &lt; 0,621 mi (1 km)</strong><br>
+              → <span class="pw-badge pw-fzfg">FZFG</span> (T &lt; 0 °C) oder <span class="pw-badge pw-fg">FG</span>
+            </div>
+          </div>
+          <div class="doc-algo-step">
+            <div class="doc-algo-num">3</div>
+            <div class="doc-algo-body">
+              <strong>Niederschlagstyp nach Temperatur</strong><br>
+              <table class="doc-table" style="margin-top:6px">
+                <thead><tr><th>Temp</th><th>Intensität</th><th>Code</th></tr></thead>
+                <tbody>
+                  <tr><td>T ≥ 0 °C</td><td>precipInH &gt; 0,4 in/h</td><td><span class="pw-badge pw-ra+">+RA</span></td></tr>
+                  <tr><td>T ≥ 0 °C</td><td>0,1 &lt; precipInH ≤ 0,4</td><td><span class="pw-badge pw-ra">RA</span></td></tr>
+                  <tr><td>T ≥ 0 °C</td><td>0,0 &lt; precipInH ≤ 0,1</td><td><span class="pw-badge pw-ra-">−RA</span></td></tr>
+                  <tr><td>−2 ≤ T &lt; 0 °C</td><td>precipInH &gt; 0,1</td><td><span class="pw-badge pw-fzra">FZRA</span></td></tr>
+                  <tr><td>−2 ≤ T &lt; 0 °C</td><td>precipInH ≤ 0,1</td><td><span class="pw-badge pw-fzdz">FZDZ</span></td></tr>
+                  <tr><td>T &lt; −2 °C</td><td>precipInH &gt; 0,4</td><td><span class="pw-badge pw-sn+">+SN</span></td></tr>
+                  <tr><td>T &lt; −2 °C</td><td>0,1 &lt; precipInH ≤ 0,4</td><td><span class="pw-badge pw-sn">SN</span></td></tr>
+                  <tr><td>T &lt; −2 °C</td><td>0,0 &lt; precipInH ≤ 0,1</td><td><span class="pw-badge pw-sn-">−SN</span></td></tr>
+                </tbody>
+              </table>
+              Quantimet-Intensitätsschwellen (Quelle: Quantimet Support-Dokumentation, bestätigt).
+            </div>
+          </div>
+          <div class="doc-algo-step">
+            <div class="doc-algo-num">4</div>
+            <div class="doc-algo-body">
+              <strong>Gewitter-Überlagerung</strong><br>
+              Bei Niederschlag: Code wird mit TS-Präfix kombiniert (z. B. <span class="pw-badge pw-ts">TSRA</span>)<br>
+              <code>TS:  ldCount ≥ 2 AND ldDist &lt; 5 NM</code><br>
+              <code>VCTS: ldCount ≥ 1 AND ldDist &lt; 15 NM</code>
+            </div>
+          </div>
+          <div class="doc-algo-step">
+            <div class="doc-algo-num">5</div>
+            <div class="doc-algo-body">
+              <strong>Kein Niederschlag — Sichtphänomene (WMO Nr. 8)</strong><br>
+              <table class="doc-table" style="margin-top:6px">
+                <thead><tr><th>VI</th><th>Feuchtebedingung</th><th>Code</th></tr></thead>
+                <tbody>
+                  <tr><td>VI &lt; 0,621 mi (1 km)</td><td>—</td><td><span class="pw-badge pw-fg">FG</span></td></tr>
+                  <tr><td>0,621 ≤ VI &lt; 3,107 mi (5 km)</td><td>accumPct ≥ 60 ODER RH ≥ 80 %</td><td><span class="pw-badge pw-br">BR</span></td></tr>
+                  <tr><td>0,621 ≤ VI &lt; 3,107 mi (5 km)</td><td>accumPct &lt; 60 UND RH &lt; 80 %</td><td><span class="pw-badge pw-hz">HZ</span></td></tr>
+                  <tr><td>VI ≥ 3,107 mi (5 km)</td><td>—</td><td>— (kein WX)</td></tr>
+                </tbody>
+              </table>
+              <div class="doc-formula-note" style="margin-top:8px"><strong>accumPct</strong> = optischer Moisture-Accumulation-Sensor (Kondensation auf Sensorlinse), <em>nicht</em> die relative Luftfeuchte. Empirisch validiert: akkumuliert bei Nebel/Dunst auf 60–90, bei klarem Wetter 30–50.</div>
+            </div>
+          </div>
+          <div class="doc-algo-step">
+            <div class="doc-algo-num">6</div>
+            <div class="doc-algo-body">
+              <strong>Trockengewitter / VCTS ohne Niederschlag</strong><br>
+              <span class="pw-badge pw-ts">TS</span> oder <span class="pw-badge pw-vcts">VCTS</span> wenn Blitzbedingungen (Schritt 4) ohne Niederschlag erfüllt.
+            </div>
+          </div>
+        </div>
+
+        <h3 class="doc-h3">Bekannte Limitierungen</h3>
+        <table class="doc-table">
+          <thead><tr><th>Phänomen</th><th>Limitation</th></tr></thead>
+          <tbody>
+            <tr><td>Schnee (SN)</td><td>Nicht durch Validierungsdaten abgedeckt. Temperatur-Schwelle −2 °C ist eine meteorologische Näherung.</td></tr>
+            <tr><td>HZ (Dunst)</td><td>Selten in Validierungsdatensatz. Schwellen empirisch, nicht offiziell bestätigt.</td></tr>
+            <tr><td>Persistenz</td><td>Intellisense verwendet vermutlich einen Persistenzfilter (N aufeinanderfolgende Samples). Aus dem String nicht rekonstruierbar — verursacht die 5 verbleibenden Abweichungen.</td></tr>
+            <tr><td>TS</td><td>Keine Validierungsdaten mit Gewittern verfügbar. WMO-Schwellen (5 NM / 15 NM) werden als Näherung verwendet.</td></tr>
+            <tr><td>MIFG / BCFG</td><td>Flacher / bankartiger Nebel nicht ableitbar (kein Höhenprofil).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="doc-section">
+        <h2 class="doc-h2">Ceilometer (M625)</h2>
+        <p>Der Ceilometer ist ausschließlich im Modell M625 verfügbar. Pro Berichtsintervall werden bis zu 4 Rangierungsversuche durchgeführt. Wolkenhöhe 0 = keine Wolke detektiert, ? = Messung fehlgeschlagen.</p>
+        <h3 class="doc-h3">CL-Statuscode (Zeichen 1)</h3>
+        <table class="doc-table">
+          <thead><tr><th>Zeichen</th><th>Bedeutung</th></tr></thead>
+          <tbody>
+            <tr><td><code>a</code></td><td>Betrieb OK, keine Wolkendetektierung</td></tr>
+            <tr><td><code>1–4</code></td><td>Detektion durch Methode 1–4</td></tr>
+            <tr><td><code>0</code></td><td>Keine Detektion</td></tr>
+            <tr><td><code>-</code></td><td>Ceilometer deaktiviert</td></tr>
+            <tr><td><code>?</code></td><td>Nicht vorhanden oder Fehler</td></tr>
+          </tbody>
+        </table>
+        <h3 class="doc-h3">Einstellungen</h3>
+        <table class="doc-table">
+          <thead><tr><th>Modus</th><th>Verhalten</th></tr></thead>
+          <tbody>
+            <tr><td>Enabled (Standard)</td><td>Anzahl Messungen je nach Reportingmodus</td></tr>
+            <tr><td>Enabled Always</td><td>4 Messungen alle 15 min unabhängig vom Modus (höherer Stromverbrauch)</td></tr>
+            <tr><td>Disabled</td><td>Keine Messungen</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="doc-section">
+        <h2 class="doc-h2">METAR-Generierung</h2>
+        <p>Der Tab ✈️ METAR erzeugt für jeden Datensatz automatisch eine METAR-Meldung im europäischen ICAO-Format (ICAO Annex 3). Die Meldungen sind nicht beglaubigt und dienen ausschließlich der taktischen Lageeinschätzung.</p>
+        <h3 class="doc-h3">Aufbau der erzeugten METAR</h3>
+        <table class="doc-table">
+          <thead><tr><th>Gruppe</th><th>Beispiel</th><th>Quelle / Anmerkung</th></tr></thead>
+          <tbody>
+            <tr><td>Kennung</td><td><code>METAR ZZZZ</code></td><td>Frei eingebbar; ZZZZ für temporäre / nicht registrierte Stationen</td></tr>
+            <tr><td>Zeit</td><td><code>150000Z</code></td><td>Tag + Stunde + Minute UTC aus GPS-Zeitstempel</td></tr>
+            <tr><td>Wind</td><td><code>36005G12KT</code></td><td>Richtung auf 10° gerundet; 000° → 360°; Böen nur wenn &gt; mittl. Wind + 5 kn; VRB wenn Richtung fehlt</td></tr>
+            <tr><td>Sichtweite</td><td><code>9999</code></td><td>In Metern (4-stellig); 9999 = ≥ 10 km; CAVOK wenn Sicht ≥ 10 km, keine Wolken &lt; 5000 ft und kein signifikantes WX</td></tr>
+            <tr><td>Signifikantes WX</td><td><code>-RA</code></td><td>Aus Present-Weather-Ableitung (Niederschlag, Nebel, Gewitter) — siehe Abschnitt Present Weather</td></tr>
+            <tr><td>Wolken</td><td><code>///021</code></td><td>Höhe in Hunderten Fuß; Bedeckungsgrad im Rohdatenstring nicht enthalten → <code>///</code> gemäß ICAO Annex 3 für automatische Stationen; NSC wenn kein Echo</td></tr>
+            <tr><td>Temperatur / Taupunkt</td><td><code>09/07</code></td><td>Taupunkt aus Magnus-Formel (Alduchov &amp; Eskridge 1996); negative Werte mit M-Präfix</td></tr>
+            <tr><td>QNH</td><td><code>Q1019</code></td><td>Aus Altimeter-Setting (inHg → hPa); Q-Gruppe gemäß europäischem Standard</td></tr>
+          </tbody>
+        </table>
+        <div class="doc-formula-note"><strong>Hinweis Bedeckungsgrad:</strong> Das Intellisense-Ceilometer liefert im Quantimet-String ausschließlich Schichthöhen, keinen Bedeckungsgrad in Oktas. Die <code>///</code>-Notation zeigt dem Leser an, dass die Höhe gemessen, der Bedeckungsgrad jedoch nicht bestimmbar ist. Für eine vollständige METAR-Meldung ist eine manuelle Einschätzung des Beobachters erforderlich.</div>
+      </div>
+
+      <div class="doc-section">
+        <h2 class="doc-h2">Batterie &amp; Stromversorgung</h2>
+        <p>Das MWS verwendet NiCd-Akkus in Kombination mit kristallinen Solarzellen. Ausgelegt für Stündlichmeldungen bei ±50° Breite, 50 % Bewölkung, Winterbedingungen.</p>
+        <table class="doc-table">
+          <thead><tr><th>Spannung</th><th>Status</th><th>Empfehlung</th></tr></thead>
+          <tbody>
+            <tr><td>&gt; 5,5 V</td><td class="ok">Voll geladen</td><td>5-Minuten-Modus möglich</td></tr>
+            <tr><td>5,0–5,5 V</td><td class="ok">Ausreichend</td><td>Stundenmodus normal</td></tr>
+            <tr><td>&lt; 5,0 V</td><td class="warn">Kritisch</td><td>3-Stunden-Modus, Laden erforderlich</td></tr>
+          </tbody>
+        </table>
+        <div class="doc-formula-note">Hinweis: Beim Laden über USB-Kabel ist die gemessene Spannung leicht erhöht gegenüber dem Akkubetrieb. Die Ladezeit bis 5 V kann bis zu 24 Stunden betragen.</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  GLOBAL STATE
+// ─────────────────────────────────────────────
+let parsedData = [];      // currently displayed (filtered)
+let allData    = [];      // all loaded records (unfiltered)
+let fileHandle = null;    // File System Access API handle
+let pollTimer  = null;    // poll timeout ID
+let pollCountdownTimer = null;
+let pollSecondsLeft = 0;
+const POLL_MS  = 5 * 60 * 1000;   // 5 minutes
+let timeFilter = { mode: 'all', hours: 0, from: null, to: null };
+let activeSource = 'file';   // 'file' | 'quantimet'
+let activeImei   = null;
+
+const units = { temp:'C', pres:'hPa', wind:'kt', vis:'mi', ceil:'m', precip:'inh' };
+const chartInstances = {};
+
+// ─────────────────────────────────────────────
+//  TAGESMODUS
+// ─────────────────────────────────────────────
+function toggleDayMode() {
+  const isDay = document.body.classList.toggle('day-mode');
+  localStorage.setItem('mws-daymode', isDay ? '1' : '0');
+  document.getElementById('day-toggle').textContent = isDay ? '🌙 Nachtmodus' : '☀ Tagesmodus';
+  // Charts neu zeichnen mit angepassten Farben
+  if (parsedData.length) {
+    renderTable(parsedData);
+    renderStation(parsedData);
+    redrawMet();
+    renderMetar(parsedData);
+  }
+}
+
+// Farben je nach aktivem Modus
+function chartColor(dark, day) {
+  return document.body.classList.contains('day-mode') ? day : dark;
+}
+const C = {
+  // [Nacht, Tag]
+  red:    () => chartColor('#f78166', '#b80000'),
+  green:  () => chartColor('#3fb950', '#1a6e00'),
+  blue:   () => chartColor('#58a6ff', '#0047b3'),
+  yellow: () => chartColor('#e3b341', '#7a4d00'),
+  purple: () => chartColor('#d2a8ff', '#6600cc'),
+  cyan:   () => chartColor('#79c0ff', '#004999'),
+  grid:   () => chartColor('rgba(48,54,61,0.5)', 'rgba(26,31,46,0.15)'),
+  tick:   () => chartColor('#6e7681', '#3a4256'),
+  legend: () => chartColor('#8b949e', '#1e2535'),
+  tip:    () => chartColor({ bg:'#1c2430', border:'#30363d', title:'#8b949e', body:'#e6edf3' },
+                           { bg:'#ffffff', border:'#1a1f2e', title:'#3a4256', body:'#060a14' }),
+};
+
+// ─────────────────────────────────────────────
+//  CSV PARSER — 300534xxxxxxxx_YYYY-MM.csv
+// ─────────────────────────────────────────────
+function parseCSVRow(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQ = !inQ; }
+    else if (line[i] === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += line[i]; }
+  }
+  result.push(cur);
+  return result;
+}
+
+function parseCloudLayers(s) {
+  // Returns array of up to 4 heights in metres (or null)
+  const empty = [null, null, null, null];
+  if (!s || !s.trim() || s.trim() === 'NCD' || s.trim() === '') return empty;
+  const parts = s.trim().split('/');
+  return parts.map(p => {
+    const ft = parseFloat(p);
+    return isNaN(ft) || ft === 0 ? null : Math.round(ft * 0.3048);
+  }).concat(empty).slice(0, 4);
+}
+
+function parseModeStr(s) {
+  if (!s) return null;
+  const t = s.trim().toLowerCase();
+  if (t.includes('1 hour')    || t === '1h')    return 1;
+  if (t.includes('20 minute') || t === '20min') return 2;
+  if (t.includes('5 minute')  || t === '5min')  return 3;
+  if (t.includes('1 minute')  || t === '1min')  return 4;
+  if (t.includes('20 second') || t === '20s')   return 5;
+  if (t.includes('10 second') || t === '10s')   return 6;
+  return null;
+}
+
+function parseMonthlyCSV(lines) {
+  const headers = parseCSVRow(lines[0]).map(h => h.trim());
+  // Build column-name → index map (trim spaces from header names)
+  const idx = {};
+  headers.forEach((h, i) => { idx[h] = i; });
+
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVRow(lines[i]);
+    if (!row || row.length < 10) continue;
+
+    const tsRaw = (row[idx['Timestamp (UTC)'] ?? 0] || '').trim();
+    if (!tsRaw) continue;
+    const dt = new Date(tsRaw + 'Z');
+    if (isNaN(dt)) continue;
+
+    const g = (key, fallback) => (row[idx[key] ?? fallback] || '').trim();
+    const pf = (key, fb) => { const v = parseFloat(g(key, fb)); return isNaN(v) ? null : v; };
+    const pi = (key, fb) => { const v = parseInt(g(key, fb));   return isNaN(v) ? null : v; };
+
+    const r = {};
+    r.datetime = dt;
+    r.timeRaw  = tsRaw.slice(0, 16);
+    r._source  = 'csv';
+
+    // Wind
+    r.windDir  = pf('Wind Dir', 2);
+    r.windKt   = pf('Wind Speed (kt)', 3);
+    r.gustDir  = pf('Max Wind Dir', 4);
+    r.gustKt   = pf('Max Wind Speed (kt)', 5);
+    r.windMs   = r.windKt != null ? r.windKt * 0.514444 : null;
+    r.windCard = '';
+
+    // Visibility (already SM)
+    r.visMi = pf('Visibility', 6);
+
+    // Present Weather — already decoded in CSV, use directly
+    const pwRaw = g('Present Weather', 7);
+    r.presentWeather = pwRaw || null;
+
+    // Precipitation
+    r.precipInH = pf('Precip (in/hr)', 8) ?? 0;
+    r.disdr     = 0;
+    r.accumPct  = null;  // not in CSV
+    r.visMv     = null;
+    r.visCalib  = null;
+
+    // Cloud layers
+    r.ceilH      = parseCloudLayers(g('Cloud Layers (ft)', 9));
+    r.ceilStatus = r.ceilH.some(h => h != null) ? '1' : '0';
+    r.ceilDetect = r.ceilH.some(h => h != null);
+
+    // Temp & humidity
+    r.tempC = pf('Temp (C)', 11);
+    r.rh    = pi('Relative Humidity', 13);
+
+    // Pressure: altimeter in inHg → hPa
+    const altInHg = pf('Altimeter (inHg)', 18);
+    r.altimInHg = altInHg;
+    r.pressHPa  = altInHg != null ? altInHg / 0.029530 : null;
+
+    // Location
+    r.lat  = pf('Lat', 16);
+    r.lon  = pf('Lon', 17);
+    const elevFt = pf('Elevation (ft)', 19);
+    r.elev = elevFt != null ? Math.round(elevFt * 0.3048) : null;
+    r.vdop = '?';
+
+    // Lightning
+    r.ldCount = pi('Lightning Freq', 23) ?? 0;
+    const ldDistRaw = g('Lightning Distance (mi)', 24);
+    r.ldDist = ldDistRaw ? parseFloat(ldDistRaw) : null;
+
+    // Station
+    r.tilt    = pi('Tilt', 25);
+    r.compass = pi('Orientation', 26);
+    r.battV   = pf('Voltage', 27);
+    r.opMode  = parseModeStr(g('Mode', 28));
+    r.daysOp  = 0;
+    r.gpsTime = true;
+    r.msgNum  = i;
+    r.cycles  = '';
+
+    results.push(r);
+  }
+  return results.sort((a, b) => a.datetime - b.datetime);
+}
+
+function detectAndParseCSV(text) {
+  const firstLine = text.trim().split('\n')[0] || '';
+  if (firstLine.startsWith('Timestamp (UTC)')) {
+    // Monthly CSV format
+    return parseMonthlyCSV(text.trim().split('\n'));
+  }
+  // Fall back to existing @0deN packet parser
+  return parseInput(text);
+}
+
+// ─────────────────────────────────────────────
+//  VALIDATION
+// ─────────────────────────────────────────────
+// Physikalisch/meteorologisch plausible Grenzwerte
+const VALID_RANGES = {
+  tempC:     { min: -80,   max: 60    },  // °C  (absolute Erdextreme)
+  rh:        { min: 0,     max: 100   },  // %
+  windKt:    { min: 0,     max: 200   },  // kt
+  gustKt:    { min: 0,     max: 250   },  // kt
+  visMi:     { min: 0,     max: 50    },  // SM
+  pressHPa:  { min: 870,   max: 1085  },  // hPa (Weltrekordbereich)
+  altimInHg: { min: 25.7,  max: 32.0  },  // inHg
+  battV:     { min: 3.0,   max: 9.0   },  // V
+  compass:   { min: 0,     max: 360   },  // °
+  tilt:      { min: 0,     max: 90    },  // °
+  lat:       { min: -90,   max: 90    },  // °
+  lon:       { min: -180,  max: 180   },  // °
+};
+
+let skippedCount = 0;
+
+function validateRecord(r) {
+  const reasons = [];
+  for (const [field, range] of Object.entries(VALID_RANGES)) {
+    const v = r[field];
+    if (v == null || isNaN(v)) continue;
+    if (v < range.min || v > range.max) {
+      reasons.push(`${field}=${v} (Bereich: ${range.min}…${range.max})`);
+    }
+  }
+  return reasons;  // leer = gültig
+}
+
+function validateAll(records) {
+  skippedCount = 0;
+  const valid = [];
+  for (const r of records) {
+    if (!r.datetime || isNaN(r.datetime.getTime())) {
+      skippedCount++;
+      console.warn('[MWS Validator] Datensatz ohne gültigen Zeitstempel gefiltert');
+      continue;
+    }
+    const reasons = validateRecord(r);
+    if (reasons.length === 0) {
+      valid.push(r);
+    } else {
+      skippedCount++;
+      console.warn(`[MWS Validator] Datensatz ${r.datetime.toISOString().slice(0, 16)} gefiltert: ${reasons.join(', ')}`);
+    }
+  }
+  return valid;
+}
+
+// ─────────────────────────────────────────────
+//  TIME FILTER
+// ─────────────────────────────────────────────
+function applyTimeFilter() {
+  const now = new Date();
+  if (timeFilter.mode === 'rolling' && timeFilter.hours > 0) {
+    const cutoff = new Date(now - timeFilter.hours * 3600000);
+    parsedData = allData.filter(d => d.datetime >= cutoff);
+  } else if (timeFilter.mode === 'custom') {
+    parsedData = allData.filter(d =>
+      (!timeFilter.from || d.datetime >= timeFilter.from) &&
+      (!timeFilter.to   || d.datetime <= timeFilter.to)
+    );
+  } else {
+    parsedData = [...allData];
+  }
+  document.getElementById('record-count').textContent = parsedData.length + ' records';
+  renderTable(parsedData);
+  renderStation(parsedData);
+  renderMet(parsedData);
+  renderMetar(parsedData);
+  updateAvailBar();
+}
+
+function updateAvailBar() {
+  const el  = document.getElementById('avail-text');
+  const dot = document.getElementById('status-dot');
+  if (!allData.length) {
+    el.textContent = 'Keine Daten geladen — CSV öffnen oder Rohdaten einfügen';
+    dot.className = 'status-dot';
+    return;
+  }
+  const first = allData[0].datetime;
+  const last  = allData[allData.length - 1].datetime;
+  const fmt   = d => d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+  const skipInfo = skippedCount > 0
+    ? ` | ⚠ ${skippedCount} korrupte Datensätze gefiltert`
+    : '';
+  el.textContent =
+    `Verfügbar: ${fmt(first)} — ${fmt(last)}` +
+    ` | ${allData.length} gesamt, ${parsedData.length} angezeigt${skipInfo}`;
+  dot.className = skippedCount > 0 ? 'status-dot warn' : 'status-dot ok';
+}
+
+function setRolling(hours, btn) {
+  timeFilter = { mode: hours === 0 ? 'all' : 'rolling', hours, from: null, to: null };
+  document.querySelectorAll('.trf-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Clear custom pickers
+  const fromEl = document.getElementById('tf-from');
+  const toEl   = document.getElementById('tf-to');
+  if (fromEl) fromEl.value = '';
+  if (toEl)   toEl.value   = '';
+  applyTimeFilter();
+}
+
+function setCustomRange() {
+  const fromEl   = document.getElementById('tf-from');
+  const toEl     = document.getElementById('tf-to');
+  const appendEl = document.getElementById('tf-append');
+  if (!fromEl.value && !toEl.value) return; // both empty → ignore
+  timeFilter = {
+    mode:   'custom',
+    hours:  0,
+    from:   fromEl.value ? new Date(fromEl.value + ':00Z') : null,
+    to:     toEl.value   ? new Date(toEl.value   + ':00Z') : null,
+  };
+  document.querySelectorAll('.trf-btn').forEach(b => b.classList.remove('active'));
+  applyTimeFilter();
+}
+
+// ─────────────────────────────────────────────
+//  FILE LOADING — File System Access API
+// ─────────────────────────────────────────────
+async function openFilePicker() {
+  if (!('showOpenFilePicker' in window)) {
+    // Fallback für Firefox etc.
+    document.getElementById('file-input').click();
+    return;
+  }
+  try {
+    [fileHandle] = await window.showOpenFilePicker({
+      types: [{ description: 'CSV-Datei', accept: { 'text/csv': ['.csv'], 'text/plain': ['.csv'] } }],
+      multiple: false
+    });
+    await loadFromHandle(true);
+    startPolling();
+    document.getElementById('reload-btn').style.display = '';
+  } catch (e) {
+    if (e.name !== 'AbortError') console.error('Dateifehler:', e);
+  }
+}
+
+async function reloadFile() {
+  await loadFromHandle(false);
+}
+
+async function loadFromHandle(fresh) {
+  if (!fileHandle) return;
+  const file = await fileHandle.getFile();
+  document.getElementById('current-file').textContent = file.name;
+  // Try UTF-8 first; fall back to Windows-1252/Latin-1 if needed (MWS CSV uses °)
+  const buf  = await file.arrayBuffer();
+  let text;
+  try {
+    const dec = new TextDecoder('utf-8', { fatal: true });
+    text = dec.decode(buf);
+  } catch {
+    const dec = new TextDecoder('windows-1252');
+    text = dec.decode(buf);
+  }
+  processText(text, fresh);
+}
+
+function onFileInput(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  document.getElementById('current-file').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => processText(e.target.result, true);
+  // Latin-1 / Windows-1252 covers the ° character in MWS CSV exports
+  reader.readAsText(file, 'windows-1252');
+}
+
+function processText(text, fresh) {
+  const raw      = detectAndParseCSV(text);
+  const newData  = validateAll(raw);        // korrupte Datensätze rausfiltern
+  const appendEl = document.getElementById('tf-append');
+  const shouldAppend = appendEl && appendEl.checked && !fresh;
+
+  if (fresh || !shouldAppend || !allData.length) {
+    allData = newData;
+  } else {
+    // Append only records newer than the last known timestamp
+    const lastTs = allData[allData.length - 1]?.datetime?.getTime() ?? 0;
+    const added  = newData.filter(d => d.datetime.getTime() > lastTs);
+    if (added.length > 0) {
+      allData = [...allData, ...added];
+      console.log(`+${added.length} neue Datensätze angehängt`);
+    }
+  }
+  applyTimeFilter();
+}
+
+// ─────────────────────────────────────────────
+//  AUTO-POLLING (alle 5 Minuten)
+// ─────────────────────────────────────────────
+function startPolling() {
+  stopPolling();
+  pollSecondsLeft = POLL_MS / 1000;
+  updatePollDisplay();
+
+  pollCountdownTimer = setInterval(() => {
+    pollSecondsLeft = Math.max(0, pollSecondsLeft - 1);
+    updatePollDisplay();
+  }, 1000);
+
+  pollTimer = setTimeout(async () => {
+    clearInterval(pollCountdownTimer);
+    if (activeSource === 'quantimet') {
+      await loadFromQuantimet(false);
+    } else {
+      await loadFromHandle(false);
+    }
+    startPolling();  // restart cycle
+  }, POLL_MS);
+}
+
+function stopPolling() {
+  if (pollTimer)         { clearTimeout(pollTimer);          pollTimer = null; }
+  if (pollCountdownTimer){ clearInterval(pollCountdownTimer); pollCountdownTimer = null; }
+  document.getElementById('poll-status').textContent = '';
+}
+
+function updatePollDisplay() {
+  const min = Math.floor(pollSecondsLeft / 60);
+  const sec = pollSecondsLeft % 60;
+  document.getElementById('poll-status').textContent =
+    `● Polling aktiv — nächste Aktualisierung: ${min}:${sec.toString().padStart(2,'0')}`;
+}
+
+// ─────────────────────────────────────────────
+//  QUANTIMET API
+// ─────────────────────────────────────────────
+async function loadQuantimetDevices() {
+  const sel = document.getElementById('qtm-device');
+  const statusEl = document.getElementById('qtm-status');
+  statusEl.textContent = 'Lade Geräteliste…';
+  try {
+    const resp = await fetch('/api/devices');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const devices = await resp.json();
+    sel.innerHTML = '<option value="">— Gerät wählen —</option>';
+    devices.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.imei;
+      opt.textContent = `${d.name} (${d.imei})`;
+      sel.appendChild(opt);
+    });
+    statusEl.textContent = `${devices.length} Gerät${devices.length !== 1 ? 'e' : ''} gefunden`;
+  } catch (e) {
+    statusEl.textContent = `Fehler: ${e.message}`;
+    console.error('loadQuantimetDevices:', e);
+  }
+}
+
+async function loadFromQuantimet(fresh = true) {
+  const sel  = document.getElementById('qtm-device');
+  const imei = sel.value;
+  if (!imei) {
+    document.getElementById('qtm-status').textContent = 'Kein Gerät ausgewählt.';
+    return;
+  }
+  const statusEl = document.getElementById('qtm-status');
+  statusEl.textContent = 'Lade Daten…';
+  try {
+    const resp = await fetch(`/api/data?imei=${encodeURIComponent(imei)}&hours=72`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    activeSource = 'quantimet';
+    activeImei   = imei;
+    const label  = sel.selectedOptions[0]?.text || imei;
+    document.getElementById('current-file').textContent = `Quantimet: ${label}`;
+    document.getElementById('reload-btn').style.display = '';
+    statusEl.textContent = '';
+    processText(text, fresh);
+    if (fresh) startPolling();
+  } catch (e) {
+    statusEl.textContent = `Fehler: ${e.message}`;
+    console.error('loadFromQuantimet:', e);
+  }
+}
+
+const SAMPLE_DATA = `@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:191:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.82:3013  RH:77  WI:1:?:0.3:S  GU:2:57  LD:?:0:--  CL:1ca14:0:0:2317:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:190:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.1  BA:1018.89:3013  RH:77  WI:1:?:0.3:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:175:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,18:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:10.1  BA:1019.71:3016  RH:73  WI:4:175:1.0:S  GU:5:174  LD:?:0:--  CL:1ca14:0:0:0:1829  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:160:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,13:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.8  BA:1020.95:3019  RH:57  WI:7:57:1.0:S  GU:7:54  LD:?:0:--  CL:2ca14:0:2679:0:0  PW:0.00:0:?:--:90:270:270  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:145:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,08:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.9  BA:1022.24:3023  RH:60  WI:3:304:1.3:S  GU:6:312  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:84:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:135:10/10  B:5.10:2:000000:79:000:ZZ  T:26/04/15,04:55:38  LA:54.35930  LO:13.08380  EL:15:z  OR:354:7:7  TA:4.2  BA:1021.46:3021  RH:88  WI:4:269:1.2:S  GU:7:273  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:278:278  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:121:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,00:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:7:7  TA:4.3  BA:1020.68:3019  RH:88  WI:4:264:1.4:S  GU:6:265  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:276:276  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;`;
+
+// ─────────────────────────────────────────────
+//  PARSER
+// ─────────────────────────────────────────────
+function parseTag(str, tag) {
+  const re = new RegExp(tag + ':([^\\s;]+(?:\\s[^@\\s:][^\\s;]*)*)');
+  const m = str.match(re);
+  return m ? m[1].trim() : null;
+}
+
+function parsePacket(raw) {
+  raw = raw.trim();
+  if (!raw.startsWith('@0')) return null;
+
+  const r = {};
+
+  // N: message number / cycles
+  const N = parseTag(raw,'N');
+  if(N){ const p=N.split(':'); r.msgNum=parseInt(p[0]); r.cycles=p[1]||''; }
+
+  // B: battery
+  const B = parseTag(raw,'B');
+  if(B){ const p=B.split(':'); r.battV=parseFloat(p[0]); r.opMode=parseInt(p[1]); r.daysOp=parseInt(p[4])||0; }
+
+  // T: time
+  const T = parseTag(raw,'T');
+  if(T){ const noGPS=T.startsWith('-'); const ts=noGPS?T.slice(1):T;
+    const [d,t]=ts.split(','); r.timeRaw=ts; r.gpsTime=!noGPS;
+    if(d&&t){ const [yy,mm,dd]=d.split('/'); r.datetime=new Date(`20${yy}-${mm}-${dd}T${t}Z`); }
+  }
+
+  // LA, LO, EL
+  const LA=parseTag(raw,'LA'); r.lat=LA&&LA!='?'?parseFloat(LA):null;
+  const LO=parseTag(raw,'LO'); r.lon=LO&&LO!='?'?parseFloat(LO):null;
+  const EL=parseTag(raw,'EL'); if(EL){const p=EL.split(':');r.elev=p[0]!='?'?parseInt(p[0]):null;r.vdop=p[1]||'?';}
+
+  // OR: orientation
+  const OR=parseTag(raw,'OR');
+  if(OR){ const p=OR.split(':'); r.compass=parseInt(p[0]); r.tilt=parseInt(p[1]); r.tiltDir=parseInt(p[2]); }
+
+  // TA: temperature
+  const TA=parseTag(raw,'TA'); r.tempC=TA&&TA!='?'?parseFloat(TA):null;
+
+  // BA: pressure
+  const BA=parseTag(raw,'BA');
+  if(BA){ const p=BA.split(':'); r.pressHPa=parseFloat(p[0]); r.altimInHg=p[1]?parseInt(p[1])/100:null; }
+
+  // RH: humidity
+  const RH=parseTag(raw,'RH'); r.rh=RH&&RH!='?'?parseInt(RH):null;
+
+  // WI: wind
+  const WI=parseTag(raw,'WI');
+  if(WI){ const p=WI.split(':');
+    r.windKt=parseFloat(p[0]);
+    r.windDir=p[1]&&p[1]!='?'?parseInt(p[1]):null;
+    r.windMs=p[2]&&p[2]!='?'?parseFloat(p[2]):null;
+    r.windCard=p[3]||'';
+  }
+
+  // GU: gusts
+  const GU=parseTag(raw,'GU');
+  if(GU){ const p=GU.split(':'); r.gustKt=parseFloat(p[0]); r.gustDir=p[1]&&p[1]!='?'?parseInt(p[1]):null; }
+
+  // LD: lightning
+  const LD=parseTag(raw,'LD');
+  if(LD){ const p=LD.split(':'); r.ldDist=p[0]!='?'?parseFloat(p[0]):null; r.ldCount=parseInt(p[1]); }
+
+  // CL: ceilometer
+  const CL=parseTag(raw,'CL');
+  if(CL){ const p=CL.split(':');
+    const s=p[0]||'';
+    r.ceilStatus=s[0]||'?';
+    r.ceilDetect=s[0]!='0'&&s[0]!='-'&&s[0]!='?';
+    r.ceilH=[p[1],p[2],p[3],p[4]].map(v=>v&&v!='?'&&v!='0'?parseInt(v):null);
+  }
+
+  // PW: precip
+  const PW=parseTag(raw,'PW');
+  if(PW){ const p=PW.split(':');
+    r.precipInH=parseFloat(p[0]);
+    r.disdr=p[1]&&p[1]!='?'?parseInt(p[1]):0;
+    r.accumPct=p[4]?parseInt(p[4]):null;
+    r.visMv=p[5]?parseInt(p[5]):null;
+    r.visCalib=p[6]?parseInt(p[6]):null;
+  }
+
+  // VI: visibility
+  const VI=parseTag(raw,'VI'); r.visMi=VI&&VI!='?'?parseFloat(VI):null;
+
+  r._raw=raw;
+  return r;
+}
+
+// ─────────────────────────────────────────────
+//  PRESENT WEATHER ABLEITUNG
+// ─────────────────────────────────────────────
+// Basis: Korrelationsanalyse aus 300534066581040_2026-04-17 CSV vs METAR-Referenz
+// Felder: VI (miles), accumPct (0-99 Feuchtesensor), precipInH, disdr, tempC
+//
+// accumPct:  30 = trocken | 60-72 = feucht (BR-Bereich) | 90 = gesättigt (FG/starker BR)
+// FG:        VI < 0.5mi, accumPct=90, kein Niederschlag
+// BR:        VI 0.5–3.0mi, accumPct >= 60, kein Niederschlag
+// RA/DZ/SN:  precipInH > 0 oder disdr > 0
+// HZ:        VI < 5mi, accumPct < 60, kein Niederschlag, Temp > 0
+
+function derivePresentWeather(r) {
+  const vi    = r.visMi;
+  const rh    = r.rh;
+  const accum = r.accumPct;
+  const precip = r.precipInH || 0;
+  const disdr  = r.disdr || 0;
+  const temp   = r.tempC;
+  const ldDist = r.ldDist;   // nautical miles, null wenn keine Blitze
+  const ldCount= r.ldCount || 0;
+
+  // Echter Niederschlag: beide Sensoren oder sehr starker Regen
+  const hasPrecip = (precip > 0 && disdr > 300) || precip > 0.5;
+  const freezing  = temp != null && temp < 0;
+
+  // ── Gewitter (WMO: ldDist < 5nm = TS, < 15nm = VCTS) ─────────────────
+  // Blitze können zusammen mit Niederschlag auftreten → wird unten kombiniert
+  const isTS   = ldCount >= 2 && ldDist != null && ldDist < 5;
+  const isVCTS = !isTS && ldCount >= 1 && ldDist != null && ldDist < 15;
+
+  // ── Niederschlag ───────────────────────────────────────────────────────
+  if (hasPrecip) {
+    // FG durch Gefrierung bei sehr schlechter Sicht
+    if (vi != null && vi < 0.62) return freezing ? 'FZFG' : 'FG';
+
+    let code;
+    if (freezing) {
+      if (temp < -2) {
+        // Unter -2°C: Schnee (Tropfen gefrieren vollständig)
+        code = precip > 0.4 ? '+SN' : (precip > 0.1 ? 'SN' : '-SN');
+      } else {
+        // -2 bis 0°C: gefrierender Regen/Niesel
+        code = precip > 0.1 ? 'FZRA' : 'FZDZ';
+      }
+    } else {
+      // Quantimet-Schwellen (aus Support-Doku bestätigt):
+      // +RA > 0.4 in/hr | RA 0.1–0.4 | -RA 0.0–0.1
+      code = precip > 0.4 ? '+RA' : (precip > 0.1 ? 'RA' : '-RA');
+    }
+    // Gewitter kombinieren
+    if (isTS) code = 'TS' + code;
+    return code;
+  }
+
+  // ── Kein Niederschlag ─────────────────────────────────────────────────
+  // Gewitter ohne detektierten Niederschlag (Trockengewitter / VCTS)
+  if (isTS)   return 'TS';
+  if (isVCTS) return 'VCTS';
+
+  if (vi == null) return null;
+
+  // WMO Nr.8 Schwellen (automatische Stationen):
+  // FG:  VI < 1 km = 0.621 mi
+  if (vi < 0.621) return 'FG';
+
+  // BR/HZ: 0.621 mi ≤ VI < 5 km (3.107 mi)
+  // Primär: accum (Moisture-Sensor) ≥ 60 → Kondensation → BR
+  // Sekundär: accum < 60 UND RH < 80% → trockener Dunst → HZ (WMO)
+  if (vi < 3.107) {
+    const moist = (accum != null && accum >= 60) || (rh != null && rh >= 80);
+    return moist ? 'BR' : 'HZ';
+  }
+
+  return null;
+}
+
+// Lesbares Label + Symbol
+const PW_LABELS = {
+  'FG':    { label:'Nebel',                   sym:'🌫️',   cls:'pw-fg'   },
+  'FZFG':  { label:'Gefrierender Nebel',      sym:'🌫️❄️',  cls:'pw-fzfg' },
+  'BR':    { label:'Feuchtnebel',             sym:'🌁',   cls:'pw-br'   },
+  'HZ':    { label:'Dunst',                   sym:'🌫',    cls:'pw-hz'   },
+  '-RA':   { label:'Leichter Regen',          sym:'🌦️',   cls:'pw-ra-'  },
+  'RA':    { label:'Regen',                   sym:'🌧️',   cls:'pw-ra'   },
+  '+RA':   { label:'Starker Regen',           sym:'⛈️',   cls:'pw-ra+'  },
+  'DZ':    { label:'Nieselregen',             sym:'🌦️',   cls:'pw-dz'   },
+  'FZRA':  { label:'Gefrierender Regen',      sym:'🌨️❄️',  cls:'pw-fzra' },
+  'FZDZ':  { label:'Gefr. Nieselregen',       sym:'🌦️❄️',  cls:'pw-fzdz' },
+  '-SN':   { label:'Leichter Schnee',         sym:'🌨️',   cls:'pw-sn-'  },
+  'SN':    { label:'Schnee',                  sym:'❄️',    cls:'pw-sn'   },
+  '+SN':   { label:'Starker Schnee',          sym:'❄️❄️',  cls:'pw-sn+'  },
+  'TS':    { label:'Gewitter',                sym:'⛈️',   cls:'pw-ts'   },
+  'TSRA':  { label:'Gewitter mit Regen',      sym:'⛈️🌧️', cls:'pw-ts'   },
+  'TS+RA': { label:'Gewitter, starker Regen', sym:'⛈️⛈️', cls:'pw-ts'   },
+  'TSSN':  { label:'Gewitter mit Schnee',     sym:'⛈️❄️',  cls:'pw-ts'   },
+  'VCTS':  { label:'Gewitter in der Nähe',    sym:'🌩️',   cls:'pw-vcts' },
+};
+
+function pwBadge(code) {
+  if (!code) return '<span class="pw-none">—</span>';
+  const info = PW_LABELS[code] || { label:code, sym:'', cls:'pw-unknown' };
+  return `<span class="${info.cls} pw-badge">${info.sym} ${code}</span>`;
+}
+
+function parseInput(text) {
+  // Split on semicolons and newlines, filter empties
+  const chunks = text.split(/[;\n]/).map(s=>s.trim()).filter(s=>s.startsWith('@0'));
+  return chunks.map(parsePacket).filter(Boolean)
+    .map(r=>{ r.presentWeather=derivePresentWeather(r); return r; })
+    .sort((a,b)=>a.datetime-b.datetime);
+}
+
+// ─────────────────────────────────────────────
+//  UNIT CONVERSIONS
+// ─────────────────────────────────────────────
+function cvtTemp(c) {
+  const off=parseFloat(document.getElementById('off-temp').value)||0;
+  const v=c+off;
+  if(units.temp==='F') return (v*9/5+32).toFixed(1);
+  if(units.temp==='K') return (v+273.15).toFixed(1);
+  return v.toFixed(1);
+}
+function cvtPres(hpa) {
+  const off=parseFloat(document.getElementById('off-pres').value)||0;
+  const v=hpa+off;
+  if(units.pres==='inHg') return (v*0.02953).toFixed(2);
+  if(units.pres==='mmHg') return (v*0.75006).toFixed(1);
+  return v.toFixed(1);
+}
+function cvtWind(kt) {
+  const off=parseFloat(document.getElementById('off-wind').value)||0;
+  const v=kt+off;
+  if(units.wind==='ms') return (v*0.5144).toFixed(1);
+  if(units.wind==='kmh') return (v*1.852).toFixed(1);
+  if(units.wind==='mph') return (v*1.15078).toFixed(1);
+  return v.toFixed(1);
+}
+// Taupunkt nach Magnus-Formel (Alduchov & Eskridge 1996)
+// Gültig -40°C…+60°C, auch bei Frost präzise
+function calcDewpoint(tempC, rh) {
+  if (tempC == null || rh == null || rh <= 0) return null;
+  const b = 17.368, c = 238.88;   // Über Wasser (AERK-Koeff.)
+  // Unter 0°C: Koeffizienten über Eis (WMO-Empfehlung)
+  const bi = 17.966, ci = 247.15;
+  const useIce = tempC < 0;
+  const bx = useIce ? bi : b;
+  const cx = useIce ? ci : c;
+  const gamma = Math.log(rh / 100) + (bx * tempC) / (cx + tempC);
+  return (cx * gamma) / (bx - gamma);
+}
+
+function cvtPrecip(inh) {
+  if(units.precip==='mmh') return (inh*25.4).toFixed(2);
+  return inh.toFixed(2);
+}
+
+function cvtVis(mi) {
+  const off=parseFloat(document.getElementById('off-vis').value)||0;
+  const v=mi+off;
+  if(units.vis==='km') return (v*1.60934).toFixed(2);
+  if(units.vis==='m') return Math.round(v*1609.34);
+  return v.toFixed(1);
+}
+
+// ─────────────────────────────────────────────
+//  UI HELPERS
+// ─────────────────────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  const tabs=['table','station','met','metar','docs'];
+  document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
+  document.getElementById('panel-'+id).classList.add('active');
+}
+
+function setUnit(param, val, el) {
+  el.closest('.unit-toggle').querySelectorAll('.unit-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  units[param]=val;
+  redrawMet();
+}
+
+function destroyChart(id) {
+  if(chartInstances[id]){ chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+
+function mkChart(id, cfg) {
+  destroyChart(id);
+  const ctx=document.getElementById(id).getContext('2d');
+  chartInstances[id]=new Chart(ctx,cfg);
+}
+
+// baseChartOpts als Funktion — damit Tagesmodus-Farben dynamisch greifen
+function baseChartOpts() {
+  const tip = C.tip();
+  const border = document.body.classList.contains('day-mode') ? '#1a1f2e' : '#30363d';
+  return {
+    responsive:true,
+    maintainAspectRatio:true,
+    plugins:{
+      legend:{display:false},
+      tooltip:{
+        backgroundColor: tip.bg,
+        borderColor:     tip.border,
+        borderWidth:1,
+        titleColor:      tip.title,
+        bodyColor:       tip.body,
+        titleFont:{family:'Share Tech Mono',size:11},
+        bodyFont:{family:'Share Tech Mono',size:12},
+      }
+    },
+    scales:{
+      x:{
+        ticks:{color:C.tick(),font:{family:'Share Tech Mono',size:10},maxTicksLimit:8},
+        grid:{color:C.grid()},
+        border:{color:border}
+      },
+      y:{
+        ticks:{color:C.tick(),font:{family:'Share Tech Mono',size:10}},
+        grid:{color:C.grid()},
+        border:{color:border}
+      }
+    }
+  };
+}
+
+function labels(data) {
+  return data.map(d=>d.datetime?
+    d.datetime.toISOString().replace('T',' ').slice(5,16):d.timeRaw||'?');
+}
+
+// ─────────────────────────────────────────────
+//  RENDER TABLE
+// ─────────────────────────────────────────────
+function renderTable(data) {
+  if(!data.length){ document.getElementById('empty-table').style.display='';document.getElementById('table-wrap').style.display='none';return;}
+  document.getElementById('empty-table').style.display='none';
+  document.getElementById('table-wrap').style.display='';
+
+  const tempUnit = units.temp==='K' ? 'K' : `°${units.temp}`;
+  const windLabel = {'kt':'kn','ms':'m/s','kmh':'km/h','mph':'mph'}[units.wind];
+  const visLabel  = {'mi':'mi','km':'km','m':'m'}[units.vis];
+  const offWdir   = parseFloat(document.getElementById('off-wdir')?.value)||0;
+  const wrapDir   = v=>((v+offWdir)%360+360)%360;
+
+  const cols=[
+    {k:'Zeit', fn:d=>d.datetime?d.datetime.toISOString().replace('T',' ').slice(0,16):'?'},
+    {k:'Msg#', fn:d=>d.msgNum??'?'},
+    {k:'Batt (V)', fn:d=>d.battV!=null?d.battV.toFixed(2):'?', cls:d=>d.battV<5?'warn':'ok'},
+    {k:'Modus', fn:d=>d.opMode??'?'},
+    {k:`Temp (${tempUnit})`, fn:d=>d.tempC!=null?cvtTemp(d.tempC):'?', cls:()=>'hilite'},
+    {k:`Druck (${units.pres})`, fn:d=>d.pressHPa!=null?cvtPres(d.pressHPa):'?'},
+    {k:'RH (%)', fn:d=>{
+      const off=parseFloat(document.getElementById('off-rh')?.value)||0;
+      return d.rh!=null?Math.min(100,Math.max(0,d.rh+off)):'?';
+    }},
+    {k:`Wind (${windLabel})`, fn:d=>d.windKt!=null?cvtWind(d.windKt):'-'},
+    {k:'Winddir (°)', fn:d=>d.windDir!=null?wrapDir(d.windDir)+'°':'?'},
+    {k:`Böe (${windLabel})`, fn:d=>d.gustKt!=null?cvtWind(d.gustKt):'-'},
+    {k:'Böedir (°)', fn:d=>d.gustDir!=null?wrapDir(d.gustDir)+'°':'?'},
+    {k:'Windcard', fn:d=>d.windCard||'-'},
+    {k:'Kompass (°)', fn:d=>d.compass??'?'},
+    {k:'Tilt (°)', fn:d=>d.tilt??'?'},
+    {k:`Sicht (${visLabel})`, fn:d=>d.visMi!=null?cvtVis(d.visMi):'?'},
+    {k:`Niederschl. (${units.precip==='mmh'?'mm/h':'in/h'})`, fn:d=>d.precipInH!=null?cvtPrecip(d.precipInH):'?'},
+    {k:'Accum%', fn:d=>d.accumPct??'?'},
+    {k:'Present WX', fn:d=>pwBadge(d.presentWeather)},
+    {k:'Ceil.Status', fn:d=>d.ceilStatus??'?'},
+    {k:`Ceil.H1 (${units.ceil})`, fn:d=>d.ceilH?.[0]!=null?(units.ceil==='ft'?Math.round(d.ceilH[0]*3.28084):d.ceilH[0]):'-'},
+    {k:`Ceil.H2 (${units.ceil})`, fn:d=>d.ceilH?.[1]!=null?(units.ceil==='ft'?Math.round(d.ceilH[1]*3.28084):d.ceilH[1]):'-'},
+    {k:'GPS Lat', fn:d=>d.lat??'—'},
+    {k:'GPS Lon', fn:d=>d.lon??'—'},
+    {k:'Elevation (m)',fn:d=>d.elev??'—'},
+    {k:'Blitz Dist.', fn:d=>d.ldDist!=null?d.ldDist:'?'},
+    {k:'Blitz Count', fn:d=>d.ldCount??'?'},
+  ];
+
+  let html='<table><thead><tr>'+cols.map(c=>`<th>${c.k}</th>`).join('')+'</tr></thead><tbody>';
+  [...data].reverse().forEach(d=>{
+    html+='<tr>'+cols.map(c=>{
+      const v=c.fn(d);
+      const cls=c.cls?c.cls(d):'';
+      return `<td class="mono ${cls}">${v}</td>`;
+    }).join('')+'</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('table-wrap').innerHTML=html;
+}
+
+// ─────────────────────────────────────────────
+//  RENDER STATION TAB
+// ─────────────────────────────────────────────
+function renderStation(data) {
+  if(!data.length){ document.getElementById('empty-station').style.display='';document.getElementById('station-content').style.display='none';return;}
+  document.getElementById('empty-station').style.display='none';
+  document.getElementById('station-content').style.display='';
+
+  const first=data[0], last=data[data.length-1];
+  const cards=[
+    {label:'GPS Latitude', value:first.lat!=null?first.lat.toFixed(5)+'°':'—', sub:'WGS84'},
+    {label:'GPS Longitude', value:first.lon!=null?first.lon.toFixed(5)+'°':'—', sub:'WGS84'},
+    {label:'Elevation', value:first.elev!=null?first.elev+' m':'—', sub:`VDOP: ${first.vdop||'?'}`},
+    {label:'Kompass', value:first.compass!=null?first.compass+'°':'—', sub:'Magnetisch Nord'},
+    {label:'Tilt', value:first.tilt!=null?first.tilt+'°':'—', sub:`Richtung: ${first.tiltDir||'?'}°`},
+    {label:'Betriebstage', value:last.daysOp||'?', sub:'Zähler'},
+    {label:'Modus', value:last.opMode!=null?(['—','1h','20min','5min','1min','20s','10s'][last.opMode]||last.opMode):'?', sub:'Reporting'},
+    {label:'Letzter Empfang', value:last.datetime?last.datetime.toISOString().replace('T',' ').slice(0,16):'?', sub:'UTC'},
+    {label:'Datensätze', value:data.length, sub:'geladen'},
+  ];
+  document.getElementById('station-cards').innerHTML=cards.map(c=>`
+    <div class="info-card">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}</div>
+      <div class="sub">${c.sub||''}</div>
+    </div>`).join('');
+
+  // Battery chart
+  const lbl=labels(data);
+  mkChart('chart-batt',{
+    type:'line',
+    data:{
+      labels:lbl,
+      datasets:[{
+        label:'Spannung (V)',
+        data:data.map(d=>d.battV),
+        borderColor:C.yellow(),
+        backgroundColor:C.yellow()+'22',
+        fill:true, tension:0.3, pointRadius:2, pointHoverRadius:5,
+      },{
+        label:'5V Grenze',
+        data:data.map(()=>5.0),
+        borderColor:C.red()+'88',
+        borderDash:[4,4], pointRadius:0, fill:false,
+      }]
+    },
+    options:{...baseChartOpts(),
+      plugins:{...baseChartOpts().plugins,legend:{display:true,labels:{color:C.legend(),font:{family:'Barlow Condensed',size:11}}}},
+      scales:{...baseChartOpts().scales,y:{...baseChartOpts().scales.y,min:4.5,suggestedMax:5.8}}
+    }
+  });
+
+  // Compass
+  mkChart('chart-orient',{
+    type:'line',
+    data:{labels:lbl,datasets:[{
+      label:'Kompass (°)',data:data.map(d=>d.compass),
+      borderColor:C.blue(),backgroundColor:C.blue()+'18',fill:true,tension:0.2,pointRadius:1
+    }]},
+    options:{...baseChartOpts(),scales:{...baseChartOpts().scales,y:{...baseChartOpts().scales.y,min:0,max:360}}}
+  });
+
+  // Tilt
+  mkChart('chart-tilt',{
+    type:'bar',
+    data:{labels:lbl,datasets:[{
+      label:'Tilt (°)',data:data.map(d=>d.tilt),
+      backgroundColor:C.green()+'88',borderColor:C.green(),borderWidth:1
+    }]},
+    options:{...baseChartOpts(),scales:{...baseChartOpts().scales,y:{...baseChartOpts().scales.y,min:0,suggestedMax:15}}}
+  });
+}
+
+// ─────────────────────────────────────────────
+//  RENDER MET TAB
+// ─────────────────────────────────────────────
+function redrawMet() {
+  if(!parsedData.length) return;
+  const data=parsedData;
+  const lbl=labels(data);
+
+  // Update titles
+  document.getElementById('title-temp').textContent=`Lufttemperatur (°${units.temp==='K'?'K':units.temp})`;
+  const presUnit=units.pres; document.getElementById('title-pres').textContent=`Luftdruck (${presUnit})`;
+  const windLabel={'kt':'kn','ms':'m/s','kmh':'km/h','mph':'mph'}[units.wind];
+  document.getElementById('title-wind').textContent=`Wind & Böen (${windLabel})`;
+  const visLabel={'mi':'mi','km':'km','m':'m'}[units.vis];
+  document.getElementById('title-vis').textContent=`Sichtweite (${visLabel})`;
+
+  const offRh=parseFloat(document.getElementById('off-rh').value)||0;
+
+  // Temp + Taupunkt
+  const tempUnitLabel = `°${units.temp==='K'?'K':units.temp}`;
+  document.getElementById('title-temp').textContent=`Lufttemperatur & Taupunkt (${tempUnitLabel})`;
+  mkChart('chart-temp',{
+    type:'line',
+    data:{labels:lbl,datasets:[
+      {
+        label:`Temp (${tempUnitLabel})`,
+        data:data.map(d=>d.tempC!=null?cvtTemp(d.tempC):null),
+        borderColor:C.red(),backgroundColor:C.red()+'18',
+        fill:true,tension:0.4,pointRadius:2,pointHoverRadius:5,spanGaps:true
+      },
+      {
+        label:`Taupunkt (${tempUnitLabel})`,
+        data:data.map(d=>{
+          const td=calcDewpoint(d.tempC,d.rh);
+          return td!=null?cvtTemp(td):null;
+        }),
+        borderColor:C.green(),backgroundColor:C.green()+'14',
+        fill:true,tension:0.4,pointRadius:2,pointHoverRadius:5,
+        borderDash:[4,3],spanGaps:true
+      }
+    ]},
+    options:{...baseChartOpts(),
+      plugins:{...baseChartOpts().plugins,
+        legend:{display:true,labels:{color:C.legend(),font:{family:'Barlow Condensed',size:11}}}
+      }
+    }
+  });
+
+  // Pressure
+  mkChart('chart-pres',{
+    type:'line',
+    data:{labels:lbl,datasets:[{
+      label:`Druck (${presUnit})`,
+      data:data.map(d=>d.pressHPa!=null?cvtPres(d.pressHPa):null),
+      borderColor:C.cyan(),backgroundColor:C.cyan()+'22',
+      fill:true,tension:0.4,pointRadius:2,spanGaps:true
+    }]},
+    options:baseChartOpts()
+  });
+
+  // RH
+  mkChart('chart-rh',{
+    type:'line',
+    data:{labels:lbl,datasets:[{
+      label:'RH (%)',
+      data:data.map(d=>d.rh!=null?Math.min(100,Math.max(0,d.rh+offRh)):null),
+      borderColor:C.green(),backgroundColor:C.green()+'22',
+      fill:true,tension:0.4,pointRadius:2,spanGaps:true
+    }]},
+    options:{...baseChartOpts(),scales:{...baseChartOpts().scales,y:{...baseChartOpts().scales.y,min:0,max:100}}}
+  });
+
+  // Wind + gust
+  mkChart('chart-wind',{
+    type:'line',
+    data:{labels:lbl,datasets:[
+      {label:`Wind (${windLabel})`,data:data.map(d=>d.windKt!=null?cvtWind(d.windKt):null),
+       borderColor:C.blue(),backgroundColor:C.blue()+'22',fill:true,tension:0.3,pointRadius:2,spanGaps:true},
+      {label:`Böe (${windLabel})`,data:data.map(d=>d.gustKt!=null?cvtWind(d.gustKt):null),
+       borderColor:C.yellow(),backgroundColor:C.yellow()+'14',fill:false,tension:0.3,pointRadius:2,spanGaps:true}
+    ]},
+    options:{...baseChartOpts(),plugins:{...baseChartOpts().plugins,legend:{display:true,labels:{color:C.legend(),font:{family:'Barlow Condensed',size:11}}}}}
+  });
+
+  // Visibility
+  mkChart('chart-vis',{
+    type:'line',
+    data:{labels:lbl,datasets:[{
+      label:`Sicht (${visLabel})`,
+      data:data.map(d=>d.visMi!=null?cvtVis(d.visMi):null),
+      borderColor:C.purple(),backgroundColor:C.purple()+'22',
+      fill:true,tension:0.3,pointRadius:2,spanGaps:true
+    }]},
+    options:{...baseChartOpts(),scales:{...baseChartOpts().scales,y:{...baseChartOpts().scales.y,min:0}}}
+  });
+
+  const offWdir=parseFloat(document.getElementById('off-wdir').value)||0;
+  const wrapDir=v=>((v+offWdir)%360+360)%360;
+
+  // Wind direction
+  mkChart('chart-wdir',{
+    type:'scatter',
+    data:{datasets:[{
+      label:'Windrichtung (°)',
+      data:data.map((d,i)=>d.windDir!=null?{x:lbl[i],y:wrapDir(d.windDir)}:null).filter(Boolean),
+      backgroundColor:C.blue()+'cc',pointRadius:3,
+    },{
+      label:'Böenrichtung (°)',
+      data:data.map((d,i)=>d.gustDir!=null?{x:lbl[i],y:wrapDir(d.gustDir)}:null).filter(Boolean),
+      backgroundColor:C.yellow()+'cc',pointRadius:3,
+    }]},
+    options:{...baseChartOpts(),
+      scales:{
+        x:{...baseChartOpts().scales.x,type:'category',labels:lbl},
+        y:{...baseChartOpts().scales.y,min:0,max:360,ticks:{stepSize:45,callback:v=>['N','NE','E','SE','S','SW','W','NW','N'][Math.round(v/45)]||v,color:C.tick()}}
+      },
+      plugins:{...baseChartOpts().plugins,legend:{display:true,labels:{color:C.legend(),font:{family:'Barlow Condensed',size:11}}}}
+    }
+  });
+
+  // Precip
+  const precipLabel = units.precip==='mmh' ? 'mm/h' : 'in/h';
+  document.getElementById('title-precip').textContent=`Niederschlag (${precipLabel})`;
+  mkChart('chart-precip',{
+    type:'bar',
+    data:{labels:lbl,datasets:[{
+      label:`Niederschlag (${precipLabel})`,
+      data:data.map(d=>d.precipInH!=null?cvtPrecip(d.precipInH):0),
+      backgroundColor:C.blue()+'88',borderColor:C.blue(),borderWidth:1
+    }]},
+    options:{...baseChartOpts(),scales:{...baseChartOpts().scales,y:{...baseChartOpts().scales.y,min:0}}}
+  });
+
+  // Present Weather Timeline
+  // pwColors: meteorologisch bedeutsame Farben — bleiben in beiden Modi kräftig
+  const pwColors = {
+    'FG':'#1a88cc','FZFG':'#0047b3','BR':'#6e7681','HZ':'#b87c00',
+    '-RA':'#1a6e00','RA':'#1fa826','+RA':'#0d6e18',
+    'DZ':'#1a6e00','FZRA':'#0047b3','FZDZ':'#1155cc',
+    '-SN':'#4488bb','SN':'#2266aa','+SN':'#113388',
+    'TS':'#cc5500','TSRA':'#cc5500','TS+RA':'#aa2200',
+    'TSSN':'#cc5500','VCTS':'#b87c00',
+  };
+  const accumData = data.map(d=>d.accumPct??null);
+  mkChart('chart-pw',{
+    type:'bar',
+    data:{
+      labels:lbl,
+      datasets:[
+        {
+          label:'Feuchtesensor (%)',
+          data:accumData,
+          backgroundColor: data.map(d=>{
+            if(!d.presentWeather) return C.tick()+'44';
+            return (pwColors[d.presentWeather]||C.red())+'88';
+          }),
+          borderColor: data.map(d=>{
+            if(!d.presentWeather) return C.tick()+'88';
+            return pwColors[d.presentWeather]||C.red();
+          }),
+          borderWidth:1,
+          yAxisID:'y',
+        },
+        {
+          label:'Sicht (mi)',
+          data:data.map(d=>d.visMi??null),
+          type:'line',
+          borderColor:C.yellow(),
+          backgroundColor:C.yellow()+'22',
+          fill:false,
+          tension:0.3,
+          pointRadius:3,
+          pointHoverRadius:5,
+          spanGaps:true,
+          yAxisID:'y2',
+        }
+      ]
+    },
+    options:{...baseChartOpts(),
+      plugins:{...baseChartOpts().plugins,
+        legend:{display:true,labels:{color:C.legend(),font:{family:'Barlow Condensed',size:11}}},
+        tooltip:{
+          ...baseChartOpts().plugins.tooltip,
+          callbacks:{
+            afterLabel: ctx => {
+              const d = data[ctx.dataIndex];
+              return d.presentWeather ? `WX: ${d.presentWeather}` : '';
+            }
+          }
+        }
+      },
+      scales:{
+        x:{...baseChartOpts().scales.x},
+        y:{...baseChartOpts().scales.y, min:0, max:100,
+           title:{display:true,text:'Accum%',color:C.tick(),font:{family:'Barlow Condensed'}}},
+        y2:{position:'right', min:0, max:7,
+            ticks:{color:C.tick(),font:{family:'Share Tech Mono',size:10}},
+            grid:{drawOnChartArea:false},
+            border:{color:document.body.classList.contains('day-mode')?'#1a1f2e':'#30363d'},
+            title:{display:true,text:'Sicht (mi)',color:C.tick(),font:{family:'Barlow Condensed'}}
+        }
+      }
+    }
+  });
+
+  // Present Weather Legende unter dem Chart aktualisieren
+  const pwSeen = [...new Set(data.map(d=>d.presentWeather).filter(Boolean))];
+  const legendEl = document.getElementById('pw-legend');
+  if(legendEl){
+    legendEl.innerHTML = pwSeen.length
+      ? pwSeen.map(code=>{
+          const info = PW_LABELS[code]||{label:code,sym:'',cls:'pw-unknown'};
+          return `<span class="${info.cls} pw-badge" style="margin:2px 4px">${info.sym} ${code} — ${info.label}</span>`;
+        }).join('')
+      : '<span style="color:var(--text3);font-size:11px;font-family:var(--mono)">Kein signifikantes WX in diesem Zeitraum</span>';
+  }
+
+  // Ceilometer
+  const ceilUnit = units.ceil;
+  const cvtCeil = m => ceilUnit === 'ft' ? Math.round(m * 3.28084) : m;
+  const ceilData=data.map(d=>({
+    t:d.datetime?d.datetime.toISOString().slice(11,16):d.timeRaw,
+    h:d.ceilH||[]
+  }));
+  const allCeil=[];
+  ceilData.forEach(r=>r.h.forEach(v=>{ if(v!=null) allCeil.push({x:r.t,y:cvtCeil(v)}); }));
+  document.getElementById('title-ceil').textContent=`Ceilometer — Wolkenhöhen (${ceilUnit})`;
+  mkChart('chart-ceil',{
+    type:'scatter',
+    data:{datasets:[{
+      label:`Wolkenhöhe (${ceilUnit})`,
+      data:allCeil,
+      backgroundColor:C.blue()+'99',
+      pointRadius:4,
+      pointHoverRadius:6,
+    }]},
+    options:{...baseChartOpts(),
+      scales:{
+        x:{...baseChartOpts().scales.x,type:'category',labels:[...new Set(ceilData.map(d=>d.t))].sort()},
+        y:{...baseChartOpts().scales.y,min:0,title:{display:true,text:`Höhe (${ceilUnit})`,color:C.tick(),font:{family:'Barlow Condensed'}}}
+      }
+    }
+  });
+
+  // Sync table with current units/offsets
+  if(parsedData.length) renderTable(parsedData);
+}
+
+function renderMet(data) {
+  if(!data.length){
+    document.getElementById('empty-met').style.display='';
+    document.getElementById('met-content').style.display='none';
+    return;
+  }
+  document.getElementById('empty-met').style.display='none';
+  document.getElementById('met-content').style.display='';
+  redrawMet();
+}
+
+// ─────────────────────────────────────────────
+//  METAR GENERATION
+// ─────────────────────────────────────────────
+// Baut einen ICAO-METAR-String (europäisches Format) aus einem geparsten MWS-Datensatz.
+// Wolkenhöhen aus CL-Feldern werden als Fuß behandelt (Intellisense-Ceilometer-Ausgabe).
+// Sicht in Metern (4-stellig), QNH mit Q-Präfix, Taupunkt aus Magnus-Formel.
+function buildMETAR(r, stationId) {
+  if (!r.datetime) return null;
+  const offWdir = parseFloat(document.getElementById('off-wdir')?.value) || 0;
+  const offTemp = parseFloat(document.getElementById('off-temp')?.value) || 0;
+  const offPres = parseFloat(document.getElementById('off-pres')?.value) || 0;
+
+  const parts = [];
+  parts.push('METAR');
+  parts.push((stationId || 'ZZZZ').padEnd(4, 'Z').slice(0, 4));
+
+  // Zeitgruppe DDHHmmZ
+  const dt = r.datetime;
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  const hh = String(dt.getUTCHours()).padStart(2, '0');
+  const mm = String(dt.getUTCMinutes()).padStart(2, '0');
+  parts.push(`${dd}${hh}${mm}Z`);
+
+  // Windgruppe
+  if (r.windKt != null) {
+    const spd = Math.round(r.windKt);
+    if (spd < 1) {
+      parts.push('00000KT');
+    } else {
+      let dir = null;
+      if (r.windDir != null) {
+        dir = Math.round(((r.windDir + offWdir) % 360 + 360) % 360 / 10) * 10;
+        if (dir === 0 || dir >= 360) dir = 360;
+      }
+      const dirStr = dir != null ? String(dir).padStart(3, '0') : 'VRB';
+      let wind = `${dirStr}${String(spd).padStart(2, '0')}`;
+      if (r.gustKt != null && Math.round(r.gustKt) > spd + 4) {
+        wind += `G${String(Math.round(r.gustKt)).padStart(2, '0')}`;
+      }
+      wind += 'KT';
+      parts.push(wind);
+    }
+  } else {
+    parts.push('/////KT');
+  }
+
+  // Sichtweite in Metern (ICAO/europäisches Format)
+  let visStr = '////';
+  if (r.visMi != null) {
+    const visMtr = r.visMi * 1609.34;
+    if (visMtr >= 10000) {
+      visStr = '9999';
+    } else if (visMtr >= 5000) {
+      visStr = String(Math.round(visMtr / 1000) * 1000).padStart(4, '0');
+    } else if (visMtr >= 800) {
+      visStr = String(Math.round(visMtr / 100) * 100).padStart(4, '0');
+    } else {
+      visStr = String(Math.round(visMtr / 50) * 50).padStart(4, '0');
+    }
+  }
+
+  // CAVOK: Sicht ≥ 10 km, keine Wolken unter 5000 ft, kein signifikantes WX
+  const visMtr = r.visMi != null ? r.visMi * 1609.34 : null;
+  // ceilH-Werte aus Paketen sind in Fuß (Intellisense-Ceilometer)
+  const ceilFt = (r.ceilH || []).filter(h => h != null);
+  const lowestFt = ceilFt.length > 0 ? Math.min(...ceilFt) : null;
+  const hasSigWX = !!r.presentWeather;
+  const isCavok = visMtr != null && visMtr >= 10000
+               && (lowestFt == null || lowestFt >= 5000)
+               && !hasSigWX;
+
+  if (isCavok) {
+    parts.push('CAVOK');
+  } else {
+    parts.push(visStr);
+
+    if (r.presentWeather) parts.push(r.presentWeather);
+
+    // Wolkengruppen — alle erkannten Schichten, aufsteigend sortiert
+    if (ceilFt.length === 0) {
+      // Kein Wolkenecho → NSC (No Significant Cloud, europäischer Standard)
+      parts.push('NSC');
+    } else {
+      // Bedeckungsgrad nicht im Rohdatenstring enthalten → ///NNN (ICAO Annex 3, Auto-Station)
+      const sorted = [...ceilFt].sort((a, b) => a - b);
+      sorted.forEach(hFt => {
+        const hRounded = Math.max(100, Math.round(hFt / 100) * 100);
+        const code = String(Math.round(hRounded / 100)).padStart(3, '0');
+        parts.push(`///${code}`);
+      });
+    }
+  }
+
+  // Temperatur / Taupunkt
+  const tempAdj = r.tempC != null ? r.tempC + offTemp : null;
+  const fmtTmp = t => {
+    const v = Math.round(t);
+    return v < 0 ? `M${String(-v).padStart(2, '0')}` : String(v).padStart(2, '0');
+  };
+  if (tempAdj != null) {
+    const dp = calcDewpoint(r.tempC, r.rh);
+    const dpStr = dp != null ? fmtTmp(dp + offTemp) : '//';
+    parts.push(`${fmtTmp(tempAdj)}/${dpStr}`);
+  } else {
+    parts.push('////');
+  }
+
+  // QNH — Altimeter-Setting → hPa (Q-Gruppe, europäisch)
+  const altAdj = r.altimInHg != null ? r.altimInHg + offPres * 0.02953 : null;
+  if (altAdj != null) {
+    parts.push(`Q${String(Math.round(altAdj * 33.8639)).padStart(4, '0')}`);
+  } else if (r.pressHPa != null) {
+    parts.push(`Q${String(Math.round(r.pressHPa + offPres)).padStart(4, '0')}`);
+  } else {
+    parts.push('Q////');
+  }
+
+  return parts.join(' ');
+}
+
+// Färbt die Teile eines METAR-Strings mit <span>-Klassen
+function colorMETAR(str) {
+  if (!str) return '—';
+  const tokens = str.split(' ');
+  return tokens.map((t, i) => {
+    if (i === 0) return `<span class="mt-id">${t}</span>`;           // METAR
+    if (i === 1) return `<span class="mt-id">${t}</span>`;           // Station
+    if (i === 2) return `<span class="mt-time">${t}</span>`;         // Zeit
+    if (t === 'CAVOK') return `<span class="mt-vis">${t}</span>`;
+    if (t === 'NSC' || t === 'SKC' || t === 'CLR') return `<span class="mt-cld">${t}</span>`;
+    if (/KT$/.test(t)) return `<span class="mt-wind">${t}</span>`;
+    if (/^\d{4}$/.test(t) || t === '9999' || t === '////') return `<span class="mt-vis">${t}</span>`;
+    if (/^(FEW|SCT|BKN|OVC|VV)/.test(t)) return `<span class="mt-cld">${t}</span>`;
+    if (/^[M\d]{2}\//.test(t) || /^\/\/\/\//.test(t)) return `<span class="mt-tmp">${t}</span>`;
+    if (/^Q\d{4}/.test(t) || /^Q\/\/\/\//.test(t)) return `<span class="mt-qnh">${t}</span>`;
+    return `<span class="mt-wx">${t}</span>`;
+  }).join(' ');
+}
+
+function renderMetar(data) {
+  if (!data.length) {
+    document.getElementById('empty-metar').style.display = '';
+    document.getElementById('metar-content').style.display = 'none';
+    return;
+  }
+  document.getElementById('empty-metar').style.display = 'none';
+  document.getElementById('metar-content').style.display = '';
+
+  const icao = (document.getElementById('metar-icao')?.value || 'ZZZZ').toUpperCase();
+
+  // Neueste Meldung oben
+  const latest = [...data].sort((a, b) => b.datetime - a.datetime)[0];
+  const latestStr = buildMETAR(latest, icao) || '—';
+  document.getElementById('metar-latest-str').innerHTML = colorMETAR(latestStr);
+
+  // Tabelle — neueste zuerst
+  const sorted = [...data].sort((a, b) => b.datetime - a.datetime);
+  const rows = sorted.map(r => {
+    const str = buildMETAR(r, icao) || '—';
+    const tStr = r.datetime
+      ? r.datetime.toISOString().replace('T', ' ').slice(0, 16) + ' Z'
+      : (r.timeRaw || '?');
+    return `<tr>
+      <td style="font-family:var(--mono);color:var(--text2)">${tStr}</td>
+      <td class="metar-string-cell">${colorMETAR(str)}</td>
+      <td><button class="btn-ghost btn-sm" onclick="navigator.clipboard.writeText(${JSON.stringify(str)})">⎘</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('metar-tbody').innerHTML = rows;
+}
+
+function copyLatestMETAR() {
+  const el = document.getElementById('metar-latest-str');
+  if (!el) return;
+  const text = el.textContent || el.innerText;
+  navigator.clipboard.writeText(text).catch(() => {});
+}
+
+// ─────────────────────────────────────────────
+//  MAIN ACTIONS
+// ─────────────────────────────────────────────
+function loadData() {
+  const text = document.getElementById('raw-input').value.trim();
+  if (!text) { alert('Bitte Rohdaten einfügen.'); return; }
+  allData = parseInput(text);
+  applyTimeFilter();
+}
+
+function loadSample() {
+  document.getElementById('raw-input').value = SAMPLE_DATA;
+  loadData();
+}
+
+function clearAll() {
+  stopPolling();
+  fileHandle   = null;
+  activeSource = 'file';
+  activeImei   = null;
+  allData    = [];
+  parsedData = [];
+  document.getElementById('qtm-status').textContent = '';
+  document.getElementById('raw-input').value    = '';
+  document.getElementById('current-file').textContent = 'Keine Datei geladen';
+  document.getElementById('reload-btn').style.display = 'none';
+  document.getElementById('record-count').textContent = '— records';
+  document.getElementById('status-dot').className = 'status-dot';
+  document.getElementById('avail-text').textContent = 'Keine Daten geladen — CSV öffnen oder Rohdaten einfügen';
+  document.getElementById('poll-status').textContent = '';
+  document.getElementById('empty-table').style.display   = '';
+  document.getElementById('table-wrap').style.display    = 'none';
+  document.getElementById('empty-station').style.display = '';
+  document.getElementById('station-content').style.display = 'none';
+  document.getElementById('empty-met').style.display     = '';
+  document.getElementById('met-content').style.display   = 'none';
+  document.getElementById('empty-metar').style.display   = '';
+  document.getElementById('metar-content').style.display = 'none';
+}
+
+// Auto-load sample data on page open (in paste field, not auto-rendered)
+window.addEventListener('DOMContentLoaded', ()=>{
+  const big=`@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:191:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.82:3013  RH:77  WI:1:?:0.3:S  GU:2:57  LD:?:0:--  CL:1ca14:0:0:2317:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:190:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.1  BA:1018.89:3013  RH:77  WI:1:?:0.3:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:189:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,22:55:38  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.3  BA:1018.91:3013  RH:75  WI:0:?:0.2:S  GU:1:?  LD:?:0:--  CL:2ca14:2342:2342:0:2217  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:188:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,22:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:9.4  BA:1019.09:3014  RH:74  WI:1:?:0.5:S  GU:2:262  LD:?:0:--  CL:2ca14:2342:2317:1992:2304  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:187:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,22:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.4  BA:1019.11:3014  RH:75  WI:2:193:0.7:S  GU:3:195  LD:?:0:--  CL:2ca14:2254:2117:2367:2254  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:186:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,21:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.3  BA:1019.19:3014  RH:75  WI:1:?:0.3:S  GU:3:192  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:185:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,21:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.3  BA:1019.15:3014  RH:77  WI:1:?:0.3:S  GU:2:184  LD:?:0:--  CL:2ca14:0:0:0:1942  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:184:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,21:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:9.3  BA:1019.32:3015  RH:77  WI:1:?:0.5:S  GU:2:79  LD:?:0:--  CL:2ca14:2079:2117:2104:2142  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:183:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,20:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.5  BA:1019.62:3015  RH:76  WI:1:?:0.3:S  GU:2:58  LD:?:0:--  CL:2ca14:1754:1717:0:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:182:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,20:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.5  BA:1019.70:3016  RH:75  WI:1:?:0.4:S  GU:2:160  LD:?:0:--  CL:2ca14:1680:1667:0:1692  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:181:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,20:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.5  BA:1019.69:3016  RH:76  WI:2:166:0.4:S  GU:3:170  LD:?:0:--  CL:2ca14:0:1730:1605:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:179:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,19:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.6  BA:1019.71:3016  RH:75  WI:3:160:0.5:S  GU:4:163  LD:?:0:--  CL:2ca14:2179:0:0:1692  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:178:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,19:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.8  BA:1019.69:3016  RH:74  WI:3:172:1.2:S  GU:5:173  LD:?:0:--  CL:2ca14:0:2254:2017:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:177:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,18:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.9  BA:1019.74:3016  RH:73  WI:4:178:1.4:S  GU:8:174  LD:?:0:--  CL:1ca14:1542:1555:1680:2142  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:176:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,18:35:38  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:10.1  BA:1019.70:3016  RH:71  WI:5:179:1.4:S  GU:7:176  LD:?:0:--  CL:2ca14:2092:2204:0:2092  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:175:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,18:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:10.1  BA:1019.71:3016  RH:73  WI:4:175:1.0:S  GU:5:174  LD:?:0:--  CL:1ca14:0:0:0:1829  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:174:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,17:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:10.4  BA:1019.79:3016  RH:72  WI:3:170:1.1:S  GU:4:171  LD:?:0:--  CL:2ca14:2354:2392:0:2317  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:173:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,17:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:10.9  BA:1019.80:3016  RH:67  WI:3:130:0.4:S  GU:5:129  LD:?:0:--  CL:2ca14:0:0:0:1754  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:172:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,17:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.0  BA:1019.75:3016  RH:64  WI:3:131:0.4:S  GU:4:128  LD:?:0:--  CL:2ca14:0:0:2629:0  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:171:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,16:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.1  BA:1019.78:3016  RH:62  WI:2:164:0.8:S  GU:3:164  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:170:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,16:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.1  BA:1019.88:3016  RH:61  WI:3:183:0.8:S  GU:4:180  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:169:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,16:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.3  BA:1019.96:3016  RH:61  WI:2:146:0.5:S  GU:4:135  LD:?:0:--  CL:2ca14:0:2404:2429:2516  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:168:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,15:55:38  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.4  BA:1020.14:3017  RH:62  WI:0:?:0.4:S  GU:3:235  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:167:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,15:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.6  BA:1020.16:3017  RH:63  WI:1:?:0.8:S  GU:6:199  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:166:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,15:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.9  BA:1020.42:3018  RH:61  WI:2:4:1.2:S  GU:4:4  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:165:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,14:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.1  BA:1020.45:3018  RH:61  WI:2:0:1.6:S  GU:4:358  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:164:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,14:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.3  BA:1020.52:3018  RH:61  WI:2:347:1.5:S  GU:6:336  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:163:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,14:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.8  BA:1020.73:3019  RH:57  WI:4:33:1.2:S  GU:6:35  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:162:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,13:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.8  BA:1020.76:3019  RH:54  WI:4:50:0.8:S  GU:6:50  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:161:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,13:35:38  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.2  BA:1020.73:3019  RH:55  WI:3:81:0.6:S  GU:3:83  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:160:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,13:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.8  BA:1020.95:3019  RH:57  WI:7:57:1.0:S  GU:7:54  LD:?:0:--  CL:2ca14:0:2679:0:0  PW:0.00:0:?:--:90:270:270  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:159:10/10  B:5.50:2:000000:79:000:ZZ  T:26/04/15,12:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.6  BA:1021.07:3020  RH:59  WI:7:60:1.3:S  GU:10:60  LD:?:0:--  CL:0ca0f:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:158:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,12:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.5  BA:1021.11:3020  RH:59  WI:6:59:1.2:S  GU:8:60  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:157:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,12:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.7  BA:1021.21:3020  RH:57  WI:7:57:1.2:S  GU:9:56  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:156:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,11:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.6  BA:1021.23:3020  RH:55  WI:6:54:1.4:S  GU:10:55  LD:?:0:--  CL:2ca14:2579:2629:0:2654  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:155:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,11:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.2  BA:1021.22:3020  RH:56  WI:6:50:1.6:S  GU:8:51  LD:?:0:--  CL:2ca0f:0:0:1879:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:154:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,11:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.7  BA:1021.34:3021  RH:58  WI:7:54:1.2:S  GU:10:54  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:153:10/10  B:5.50:2:000000:79:000:ZZ  T:26/04/15,10:55:38  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.3  BA:1021.49:3021  RH:58  WI:7:56:1.1:S  GU:9:54  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:152:10/10  B:5.50:2:000000:79:000:ZZ  T:26/04/15,10:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:352:6:6  TA:11.2  BA:1021.68:3021  RH:60  WI:6:60:1.7:S  GU:10:56  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:151:10/10  B:5.50:2:000000:79:000:ZZ  T:26/04/15,10:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.4  BA:1021.90:3022  RH:60  WI:6:60:1.4:S  GU:7:58  LD:?:0:--  CL:1ca14:1080:0:0:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:150:10/10  B:5.50:2:000000:79:000:ZZ  T:26/04/15,09:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.1  BA:1021.90:3022  RH:58  WI:5:66:0.9:S  GU:8:62  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:149:10/10  B:5.50:2:000000:79:000:ZZ  T:26/04/15,09:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:352:6:6  TA:12.8  BA:1021.94:3022  RH:56  WI:2:333:1.3:S  GU:7:329  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:148:10/10  B:5.50:2:000000:79:000:ZZ  T:26/04/15,09:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.1  BA:1022.05:3023  RH:60  WI:4:66:1.1:S  GU:6:64  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:147:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,08:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.9  BA:1022.12:3023  RH:58  WI:2:50:1.2:S  GU:8:53  LD:?:0:--  CL:1ca14:0:755:0:0  PW:0.00:0:?:--:84:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:146:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,08:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:13.1  BA:1022.16:3023  RH:58  WI:4:322:1.4:S  GU:6:326  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:84:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:145:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,08:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.9  BA:1022.24:3023  RH:60  WI:3:304:1.3:S  GU:6:312  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:84:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:144:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,07:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:13.0  BA:1022.26:3023  RH:60  WI:3:262:1.5:S  GU:6:257  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:84:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:143:10/10  B:5.40:2:000000:79:000:ZZ  T:26/04/15,07:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:12.0  BA:1022.14:3023  RH:65  WI:3:329:1.1:S  GU:5:340  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:84:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:142:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,07:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:11.2  BA:1022.11:3023  RH:67  WI:3:279:0.6:S  GU:5:267  LD:?:0:--  CL:0ca14:0:0:?:?  PW:0.00:0:?:--:84:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:141:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,06:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:353:6:6  TA:10.6  BA:1022.07:3023  RH:70  WI:2:276:1.2:S  GU:4:278  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:84:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:140:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,06:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.4  BA:1022.05:3023  RH:73  WI:3:261:1.4:S  GU:4:261  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:84:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:139:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,06:15:38  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:8.0  BA:1022.00:3022  RH:77  WI:3:264:1.5:S  GU:5:265  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:138:10/10  B:5.30:2:000000:79:000:ZZ  T:26/04/15,05:55:38  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:7.2  BA:1021.88:3022  RH:78  WI:4:263:1.6:S  GU:7:268  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:137:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,05:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:6.4  BA:1021.77:3022  RH:82  WI:3:266:1.0:S  GU:5:269  LD:?:0:--  CL:0ca14:0:0:0:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:136:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,05:15:38  LA:54.35930  LO:13.08380  EL:15:z  OR:354:7:7  TA:5.1  BA:1021.63:3021  RH:86  WI:4:258:1.2:S  GU:5:258  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:276:276  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:135:10/10  B:5.10:2:000000:79:000:ZZ  T:26/04/15,04:55:38  LA:54.35930  LO:13.08380  EL:15:z  OR:354:7:7  TA:4.2  BA:1021.46:3021  RH:88  WI:4:269:1.2:S  GU:7:273  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:278:278  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:134:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,04:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.8  BA:1021.34:3020  RH:90  WI:4:262:1.0:S  GU:5:261  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:279:279  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:133:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,04:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.7  BA:1021.26:3020  RH:90  WI:4:260:1.3:S  GU:5:260  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:280:280  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:132:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,03:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.7  BA:1021.26:3020  RH:90  WI:5:263:1.4:S  GU:8:265  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:280:280  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:131:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,03:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.7  BA:1021.19:3020  RH:90  WI:4:256:1.2:S  GU:5:254  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:279:279  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:130:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,03:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.7  BA:1021.12:3020  RH:90  WI:4:263:1.7:S  GU:6:266  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:280:280  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:129:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,02:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.7  BA:1021.03:3020  RH:90  WI:5:263:1.5:S  GU:7:265  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:280:280  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:128:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,02:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.7  BA:1021.03:3020  RH:90  WI:4:267:1.4:S  GU:6:269  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:279:279  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:127:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,02:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.7  BA:1021.02:3020  RH:89  WI:4:266:1.3:S  GU:6:269  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:279:279  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:126:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,01:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.9  BA:1020.87:3019  RH:89  WI:3:260:1.2:S  GU:5:261  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:279:279  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:125:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,01:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:3.9  BA:1020.74:3019  RH:89  WI:3:261:1.2:S  GU:6:261  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:279:279  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:124:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,01:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:4.0  BA:1020.71:3019  RH:89  WI:4:266:1.2:S  GU:6:267  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:279:279  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:123:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,00:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:4.1  BA:1020.74:3019  RH:89  WI:3:267:1.2:S  GU:4:268  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:278:278  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:122:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,00:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:355:7:7  TA:4.1  BA:1020.69:3019  RH:88  WI:4:263:1.2:S  GU:6:262  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:277:277  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
+@0deN:121:10/10  B:5.00:2:000000:79:000:ZZ  T:26/04/15,00:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:7:7  TA:4.3  BA:1020.68:3019  RH:88  WI:4:264:1.4:S  GU:6:265  LD:?:0:--  CL:0cc14:0:0:0:0  PW:0.00:0:?:--:90:276:276  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;`;
+  // Beispieldaten in Paste-Feld vorausfüllen, aber nicht automatisch laden
+  // (Nutzer soll bewusst eine CSV wählen oder manuell laden)
+  document.getElementById('raw-input').value = big;
+});
+</script>
+</body>
+</html>
