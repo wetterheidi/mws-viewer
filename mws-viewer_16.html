@@ -2131,6 +2131,15 @@ async function loadFromQuantimet(fresh = true) {
     document.getElementById('qtm-status').textContent = 'Kein Gerät ausgewählt.';
     return;
   }
+  // Frischer Ladevorgang: sofort alten Poll stoppen, damit kein veralteter
+  // Zyklus mit der alten IMEI noch in processText(fresh=false) läuft.
+  if (fresh) stopPolling();
+
+  // Poll-Zyklus: wenn der Nutzer zwischenzeitlich das Dropdown geändert hat
+  // (ohne "Laden" zu klicken), stimmt sel.value nicht mehr mit activeImei überein.
+  // In diesem Fall den Poll überspringen — erst nach echtem "Laden" wechseln.
+  if (!fresh && activeImei && imei !== activeImei) return;
+
   const statusEl = document.getElementById('qtm-status');
   statusEl.textContent = 'Lade Daten…';
   try {
