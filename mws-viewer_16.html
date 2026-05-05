@@ -2358,8 +2358,8 @@ function parsePacket(raw) {
 // Felder: VI (miles), accumPct (0-99 Feuchtesensor), precipInH, disdr, tempC
 //
 // accumPct:  30 = trocken | 60-72 = feucht (BR-Bereich) | 90 = gesättigt (FG/starker BR)
-// FG:        VI < 0.5mi, accumPct=90, kein Niederschlag
-// BR:        VI 0.5–3.0mi, accumPct >= 60, kein Niederschlag
+// FG:        VI < 0.621mi, kein Niederschlag (bei Niederschlag kommt Sichtreduktion vom Regen)
+// BR:        VI 0.621–3.107mi, accumPct >= 60 oder RH >= 80% — auch kombiniert mit Niederschlag möglich
 // RA/DZ/SN:  precipInH > 0 oder disdr > 0
 // HZ:        VI < 5mi, accumPct < 60, kein Niederschlag, Temp > 0
 
@@ -2384,22 +2384,22 @@ function derivePresentWeather(r) {
 
   // ── Niederschlag ───────────────────────────────────────────────────────
   if (hasPrecip) {
-    // FG durch Gefrierung bei sehr schlechter Sicht
-    if (vi != null && vi < 0.62) return freezing ? 'FZFG' : 'FG';
-
+    // Während aktiven Niederschlags kommt schlechte Sicht vom Regen, nicht von Nebel.
+    // FG/FZFG wird daher nie zusammen mit Niederschlag gemeldet.
     let code;
     if (freezing) {
       if (temp < -2) {
-        // Unter -2°C: Schnee (Tropfen gefrieren vollständig)
         code = precip > 0.4 ? '+SN' : (precip > 0.1 ? 'SN' : '-SN');
       } else {
-        // -2 bis 0°C: gefrierender Regen/Niesel
         code = precip > 0.1 ? 'FZRA' : 'FZDZ';
       }
     } else {
-      // Quantimet-Schwellen (aus Support-Doku bestätigt):
-      // +RA > 0.4 in/hr | RA 0.1–0.4 | -RA 0.0–0.1
       code = precip > 0.4 ? '+RA' : (precip > 0.1 ? 'RA' : '-RA');
+    }
+    // BR als Sekundärerscheinung wenn Sicht im Dunst-/Nebelbereich (0.621–3.107 mi)
+    if (vi != null && vi >= 0.621 && vi < 3.107) {
+      const moist = (accum != null && accum >= 60) || (rh != null && rh >= 80);
+      if (moist) code += ' BR';
     }
     // Gewitter kombinieren
     if (isTS) code = 'TS' + code;
