@@ -118,7 +118,7 @@ def api_declination():
         today = pd.Timestamp(datetime.date.today())
         Be, Bn, _ = ppigrf.igrf(lon, lat, 0, today)
         decl = float(np.degrees(np.arctan2(Be[0], Bn[0])))
-        return jsonify({'declination': round(decl, 4)})
+        return jsonify({'declination': round(decl)})
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 
