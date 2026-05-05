@@ -1020,6 +1020,10 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
       <button class="btn-ghost" onclick="loadSample()">Beispieldaten laden</button>
     </div>
   </details>
+  <details class="paste-details" id="raw-last-details">
+    <summary onclick="showLastRaw()">Letztes Rohpaket anzeigen</summary>
+    <textarea id="raw-last-out" readonly style="height:6em;background:var(--bg2);color:var(--text1);font-size:11px;" placeholder="Noch keine Quantimet-Daten geladen."></textarea>
+  </details>
 </div>
 
 <div id="tab-bar">
@@ -1665,8 +1669,16 @@ let pollCountdownTimer = null;
 let pollSecondsLeft = 0;
 const POLL_MS  = 5 * 60 * 1000;   // 5 minutes
 let timeFilter = { mode: 'all', hours: 0, from: null, to: null };
-let activeSource = 'file';   // 'file' | 'quantimet'
-let activeImei   = null;
+let activeSource  = 'file';   // 'file' | 'quantimet'
+let activeImei    = null;
+let lastRawText   = '';       // raw text of last Quantimet response (for debug)
+
+function showLastRaw() {
+  const el = document.getElementById('raw-last-out');
+  if (!lastRawText) { el.value = 'Noch keine Quantimet-Daten geladen.'; return; }
+  const lines = lastRawText.split('\n').map(l => l.trim()).filter(Boolean);
+  el.value = lines[lines.length - 1] || '(leer)';
+}
 
 // magnetic declination state
 let _declLat      = null;
@@ -2221,6 +2233,7 @@ async function loadFromQuantimet(fresh = true) {
     const resp = await fetch(`/api/data?imei=${encodeURIComponent(imei)}&hours=72`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();
+    lastRawText  = text;
     activeSource = 'quantimet';
     activeImei   = imei;
     const label  = sel.selectedOptions[0]?.text || imei;
