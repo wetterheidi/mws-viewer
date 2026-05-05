@@ -2803,7 +2803,7 @@ function renderTable(data) {
   ];
 
   let html='<table><thead><tr>'+cols.map(c=>`<th>${c.k}</th>`).join('')+'</tr></thead><tbody>';
-  [...data].reverse().forEach(d=>{
+  [...data].sort((a,b)=>b.datetime-a.datetime).forEach(d=>{
     html+='<tr>'+cols.map(c=>{
       const v=c.fn(d);
       const cls=c.cls?c.cls(d):'';
