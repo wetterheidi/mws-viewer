@@ -896,6 +896,19 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   .info-grid { grid-template-columns: 1fr 1fr; }
 }
 
+/* ── CAMERA TAB ── */
+#panel-camera { padding: 14px; }
+.cam-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.cam-status   { font-size: 12px; color: var(--text2); font-family: var(--mono); }
+.cam-set      { margin-bottom: 24px; }
+.cam-label    { font-family: var(--mono); font-size: 13px; font-weight: 700;
+                color: var(--accent); margin-bottom: 8px; }
+.cam-imgs     { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.cam-img      { width: 100%; aspect-ratio: 4/3; object-fit: cover;
+                border-radius: 4px; border: 1px solid var(--border);
+                background: var(--bg2); display: block; }
+@media (max-width: 900px) { .cam-imgs { grid-template-columns: repeat(2, 1fr); } }
+
 /* ── DATA SOURCE SECTION ── */
 #source-section {
   padding: 12px 24px;
@@ -1092,6 +1105,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   <div class="tab" onclick="switchTab('station')">📡 Station</div>
   <div class="tab" onclick="switchTab('met')">🌤 Meteorologie</div>
   <div class="tab" onclick="switchTab('metar')">✈️ METAR</div>
+  <div class="tab" onclick="switchTab('camera')">📷 Kamera</div>
   <div class="tab" id="tab-alerts" onclick="switchTab('alerts')">🔔 Alarme</div>
   <div class="tab" onclick="switchTab('docs')">📖 Dokumentation</div>
 </div>
@@ -1777,6 +1791,15 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   </div>
 
   <!-- TAB 6: ALARME -->
+  <!-- TAB: KAMERA -->
+  <div class="tab-panel" id="panel-camera">
+    <div class="cam-controls">
+      <button class="btn-primary" onclick="loadCameraImages()">📷 Bilder laden</button>
+      <span class="cam-status" id="cam-status">—</span>
+    </div>
+    <div id="cam-grid"></div>
+  </div>
+
   <div class="tab-panel" id="panel-alerts">
     <div class="alerts-wrap">
       <div class="alerts-top">
@@ -2421,6 +2444,79 @@ async function loadFromQuantimet(fresh = true) {
   }
 }
 
+// ─────────────────────────────────────────────
+//  CAMERA TAB
+// ─────────────────────────────────────────────
+async function loadCameraImages() {
+  const imei = activeImei;
+  const statusEl = document.getElementById('cam-status');
+  const grid     = document.getElementById('cam-grid');
+
+  if (!imei) {
+    statusEl.textContent = 'Kein Quantimet-Gerät geladen.';
+    return;
+  }
+  statusEl.textContent = 'Lade Timestamps…';
+  grid.innerHTML = '';
+
+  try {
+    const resp = await fetch(`/api/images?imei=${encodeURIComponent(imei)}&hours=48`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const timestamps = data.timestamps || [];
+
+    if (!timestamps.length) {
+      statusEl.textContent = 'Keine Einträge gefunden.';
+      return;
+    }
+
+    const pad2 = n => String(n).padStart(2, '0');
+    let visibleSets = 0;
+
+    timestamps.forEach(({ ts, value }) => {
+      const d   = new Date(ts);
+      const yy  = String(d.getUTCFullYear()).slice(2);
+      const tsStr = yy + pad2(d.getUTCMonth()+1) + pad2(d.getUTCDate())
+                       + pad2(d.getUTCHours())    + pad2(d.getUTCMinutes());
+      const base  = `https://mws-s3.s3.us-east-1.amazonaws.com/images/${imei}/${imei}-${tsStr}`;
+
+      const set = document.createElement('div');
+      set.className = 'cam-set';
+      set.style.display = 'none';
+
+      const label = document.createElement('div');
+      label.className = 'cam-label';
+      label.textContent = value + ' UTC';
+      set.appendChild(label);
+
+      const imgs = document.createElement('div');
+      imgs.className = 'cam-imgs';
+
+      for (let c = 1; c <= 4; c++) {
+        const img = document.createElement('img');
+        img.className = 'cam-img';
+        img.alt = `Kamera ${c}`;
+        img.onload = () => {
+          set.style.display = '';
+          visibleSets++;
+          statusEl.textContent = `${visibleSets} Bildsatz/-sätze geladen`;
+        };
+        img.onerror = () => { img.style.display = 'none'; };
+        img.src = `${base}-${c}.jpg`;
+        imgs.appendChild(img);
+      }
+
+      set.appendChild(imgs);
+      grid.appendChild(set);
+    });
+
+    statusEl.textContent = 'Prüfe Bilder…';
+  } catch (e) {
+    statusEl.textContent = `Fehler: ${e.message}`;
+    console.error('loadCameraImages:', e);
+  }
+}
+
 const SAMPLE_DATA = `@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:191:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.82:3013  RH:77  WI:1:?:0.3:S  GU:2:57  LD:?:0:--  CL:1ca14:0:0:2317:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:190:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.1  BA:1018.89:3013  RH:77  WI:1:?:0.3:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
@@ -2693,7 +2789,7 @@ function cvtVis(mi) {
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  const tabs=['dashboard','table','station','met','metar','alerts','docs'];
+  const tabs=['dashboard','table','station','met','metar','camera','alerts','docs'];
   document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
   document.getElementById('panel-'+id).classList.add('active');
   if (id==='alerts') {

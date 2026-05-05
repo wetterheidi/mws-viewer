@@ -142,6 +142,36 @@ def api_devices():
         return jsonify({'error': str(exc), 'type': type(exc).__name__}), 500
 
 
+@app.route('/api/images')
+def api_images():
+    """Return image timestamps for a device (last N hours)."""
+    imei  = request.args.get('imei', '').strip()
+    hours = int(request.args.get('hours', 48))
+    if not imei:
+        return jsonify({'error': 'imei parameter required'}), 400
+    try:
+        devices = get_devices()
+        device  = next((d for d in devices if d['imei'] == imei), None)
+        if device is None:
+            return jsonify({'error': f'Device {imei} not found'}), 404
+        now_ms   = int(time.time() * 1000)
+        start_ms = now_ms - hours * 3_600_000
+
+        def fetch(token):
+            return requests.get(
+                f'{QUANTIMET}/unit/entries/timestamps',
+                params={'deviceId': device['id'], 'startTs': start_ms},
+                headers=_auth_headers(token),
+                timeout=15,
+            )
+
+        r = _retry_on_401(fetch)
+        timestamps = r.json().get('timestamp', [])
+        return jsonify({'timestamps': timestamps, 'imei': imei})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
 @app.route('/api/data')
 def api_data():
     """
