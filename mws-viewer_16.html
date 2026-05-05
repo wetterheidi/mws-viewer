@@ -1467,7 +1467,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
             <div class="doc-algo-num">1</div>
             <div class="doc-algo-body">
               <strong>Niederschlag prüfen</strong><br>
-              <code>hasPrecip = (precipInH &gt; 0 AND disdr &gt; 300) OR precipInH &gt; 0,5</code><br>
+              <code>hasPrecip = (precipInH &gt; 0 AND disdr &gt; 300) OR precipInH &gt; 0,1</code><br>
               Disdrometer-Werte ≤ 300 werden als Rauschen verworfen (empirisch aus Referenzdaten).
             </div>
           </div>
@@ -2373,8 +2373,8 @@ function derivePresentWeather(r) {
   const ldDist = r.ldDist;   // nautical miles, null wenn keine Blitze
   const ldCount= r.ldCount || 0;
 
-  // Echter Niederschlag: beide Sensoren oder sehr starker Regen
-  const hasPrecip = (precip > 0 && disdr > 300) || precip > 0.5;
+  // Echter Niederschlag: beide Sensoren (noise filter für -RA) oder moderater Regen (≥ RA-Schwelle)
+  const hasPrecip = (precip > 0 && disdr > 300) || precip > 0.1;
   const freezing  = temp != null && temp < 0;
 
   // ── Gewitter (WMO: ldDist < 5nm = TS, < 15nm = VCTS) ─────────────────
