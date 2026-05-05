@@ -6,11 +6,15 @@ MWS Viewer Server
 - Caches auth token (1h) and device list (5min)
 """
 
+import datetime
 import json
 import os
 import threading
 import time
 
+import numpy as np
+import pandas as pd
+import ppigrf
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 
@@ -102,25 +106,19 @@ def get_devices() -> list:
 
 # ── API routes ─────────────────────────────────────────────────────────────────
 
-NOAA_DECL_URL = 'https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination'
-
 @app.route('/api/declination')
 def api_declination():
-    """Proxy NOAA IGRF magnetic declination lookup (avoids browser CORS restriction)."""
+    """Compute IGRF magnetic declination locally via ppigrf (no external API needed)."""
     try:
         lat = float(request.args['lat'])
         lon = float(request.args['lon'])
     except (KeyError, ValueError):
         return jsonify({'error': 'lat and lon required'}), 400
     try:
-        r = requests.get(
-            NOAA_DECL_URL,
-            params={'lat': round(lat, 4), 'lon': round(lon, 4), 'resultFormat': 'json'},
-            timeout=15,
-        )
-        r.raise_for_status()
-        decl = r.json()['result'][0]['declination']
-        return jsonify({'declination': decl})
+        today = pd.Timestamp(datetime.date.today())
+        Be, Bn, _ = ppigrf.igrf(lon, lat, 0, today)
+        decl = float(np.degrees(np.arctan2(Be[0], Bn[0])))
+        return jsonify({'declination': round(decl, 4)})
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 
