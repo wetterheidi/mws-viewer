@@ -3181,7 +3181,7 @@ function drawWindRose(rwyHdg, windDir, windSpd, gustSpd) {
 
   // Opaque centre disc — covers runway line where the text overlay sits
   const discR = Math.round(R * 0.51);
-  h += `<circle cx="${cx}" cy="${cy}" r="${discR}" fill="var(--bg1)"/>`;
+  h += `<circle cx="${cx}" cy="${cy}" r="${discR}" fill="var(--bg)"/>`;
   h += `<circle cx="${cx}" cy="${cy}" r="${discR}" fill="none" stroke="${cBorder}" stroke-width="0.8" opacity="0.4"/>`;
 
   // Wind arrow: tail near outer ring, head touches disc edge
