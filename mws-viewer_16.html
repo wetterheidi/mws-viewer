@@ -317,6 +317,28 @@ tbody td.bad { color: var(--accent3); }
 .db-wind-spd  { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--text1); }
 .db-wind-unit { font-size: 13px; color: var(--text2); }
 .db-wx-code   { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--accent); }
+.db-rwy-card  {
+  margin-top: 10px; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px;
+}
+.db-rwy-inner { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; }
+@media (max-width: 640px) { .db-rwy-inner { grid-template-columns: 1fr; } }
+.db-rwy-input { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.db-rwy-input label { font-size: 11px; color: var(--text2); }
+.db-rwy-input input {
+  font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--accent);
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
+  width: 80px; padding: 4px 8px; text-align: center;
+}
+.db-rwy-input span { font-size: 14px; color: var(--text2); }
+.db-comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
+.db-comp-row  { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.db-comp-label{ font-size: 11px; color: var(--text2); white-space: nowrap; }
+.db-comp-val  { font-family: var(--mono); font-size: 20px; font-weight: 700; }
+.db-comp-sub  { font-family: var(--mono); font-size: 14px; color: var(--text2); }
+.db-hw-pos    { color: var(--accent2); }
+.db-hw-neg    { color: var(--accent3); }
+.db-cw-val    { color: var(--accent4); }
 
 /* ── CHARTS ── */
 .chart-grid {
@@ -1197,6 +1219,39 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         </div>
 
       </div><!-- db-grid -->
+
+      <!-- Runway wind components -->
+      <div class="db-rwy-card">
+        <div class="db-card-title">Windkomponenten Runway</div>
+        <div class="db-rwy-inner">
+          <div class="db-rwy-input">
+            <label>Runway QFU (mag.)</label>
+            <input type="number" id="db-rwy-hdg" min="1" max="360" step="1" value="360"
+                   oninput="updateRwyComponents()">
+            <span>°</span>
+          </div>
+          <div class="db-comp-grid">
+            <div class="db-comp-row">
+              <span class="db-comp-label">Headwind / Tailwind</span>
+              <span id="db-hw" class="db-comp-val">—</span>
+            </div>
+            <div class="db-comp-row">
+              <span class="db-comp-label">Crosswind</span>
+              <span id="db-cw" class="db-comp-val db-cw-val">—</span>
+            </div>
+            <div class="db-comp-row">
+              <span class="db-comp-label">Böe HW / TW</span>
+              <span id="db-gust-hw" class="db-comp-sub">—</span>
+            </div>
+            <div class="db-comp-row">
+              <span class="db-comp-label">Böe CW</span>
+              <span id="db-gust-cw" class="db-comp-sub db-cw-val">—</span>
+            </div>
+          </div>
+          <svg id="db-wind-rose" width="150" height="150" style="flex-shrink:0"></svg>
+        </div>
+      </div>
+
     </div><!-- db-content -->
   </div><!-- panel-dashboard -->
 
@@ -1809,6 +1864,7 @@ let timeFilter = { mode: 'all', hours: 0, from: null, to: null };
 let activeSource  = 'file';   // 'file' | 'quantimet'
 let activeImei    = null;
 let lastRawText   = '';       // raw text of last Quantimet response (for debug)
+let _dbLatest     = null;     // latest record for dashboard/runway recalc
 
 function showLastRaw() {
   const el = document.getElementById('raw-last-out');
@@ -3032,6 +3088,115 @@ function renderDashboard(data) {
     set('db-ceil', 'keine Wolken');
   }
   set('db-ceilstatus', r.ceilStatus ?? '—');
+
+  _dbLatest = r;
+  updateRwyComponents();
+}
+
+function updateRwyComponents() {
+  if (!_dbLatest) return;
+  const r = _dbLatest;
+  const rwyHdg = parseFloat(document.getElementById('db-rwy-hdg')?.value) || 360;
+
+  const components = (spd, dir) => {
+    if (spd == null || dir == null) return null;
+    const alpha = (dir - rwyHdg) * Math.PI / 180;
+    return { hw: spd * Math.cos(alpha), cw: spd * Math.sin(alpha) };
+  };
+
+  const wind = components(r.windKt, r.windDir);
+  const gust = components(r.gustKt, r.gustDir ?? r.windDir);
+
+  const fmtHW = (c, large) => {
+    if (!c) return { text: '—', cls: '' };
+    const isHW = c.hw >= 0;
+    const val  = Math.abs(c.hw).toFixed(large ? 0 : 0);
+    return { text: `${val} kn ${isHW ? '▲ HW' : '▼ TW'}`, cls: isHW ? 'db-hw-pos' : 'db-hw-neg' };
+  };
+  const fmtCW = c => {
+    if (!c) return '—';
+    const side = c.cw >= 0 ? '→ R' : '← L';
+    return `${Math.abs(c.cw).toFixed(0)} kn ${side}`;
+  };
+
+  const hwEl = document.getElementById('db-hw');
+  const hwRes = fmtHW(wind, true);
+  if (hwEl) { hwEl.textContent = hwRes.text; hwEl.className = `db-comp-val ${hwRes.cls}`; }
+  const setT = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setT('db-cw',       fmtCW(wind));
+  const gustHW = fmtHW(gust, false);
+  const ghEl = document.getElementById('db-gust-hw');
+  if (ghEl) { ghEl.textContent = gustHW.text; ghEl.className = `db-comp-sub ${gustHW.cls}`; }
+  setT('db-gust-cw',  fmtCW(gust));
+
+  drawWindRose(rwyHdg, r.windDir, r.windKt, r.gustKt);
+}
+
+function drawWindRose(rwyHdg, windDir, windSpd, gustSpd) {
+  const svg = document.getElementById('db-wind-rose');
+  if (!svg) return;
+  const cx = 75, cy = 75, R = 58;
+
+  const pt = (deg, radius) => {
+    const rad = (deg - 90) * Math.PI / 180;
+    return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+  };
+  const line = (x1,y1,x2,y2,col,w,dash='') =>
+    `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+      stroke="${col}" stroke-width="${w}" stroke-dasharray="${dash}" stroke-linecap="round"/>`;
+  const txt = (x,y,t,col,sz,anchor='middle') =>
+    `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}"
+      fill="${col}" font-size="${sz}" font-family="monospace">${t}</text>`;
+
+  // CSS variable fallbacks for SVG (inline SVG can use CSS vars in attributes)
+  const cAccent  = 'var(--accent)';
+  const cAccent4 = 'var(--accent4)';
+  const cAccent2 = 'var(--accent2)';
+  const cAccent3 = 'var(--accent3)';
+  const cBorder  = 'var(--border)';
+  const cText2   = 'var(--text2)';
+
+  let h = `<defs>
+    <marker id="rw-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+      <polygon points="0,0 7,3.5 0,7" fill="${cAccent}"/>
+    </marker>
+  </defs>`;
+
+  // Background circle + tick marks
+  h += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${cBorder}" stroke-width="1.5"/>`;
+  for (let d = 0; d < 360; d += 30) {
+    const [ox,oy] = pt(d, R); const [ix,iy] = pt(d, R - (d%90===0?8:4));
+    h += line(ox,oy,ix,iy,cBorder,1);
+  }
+  // Cardinal labels
+  [['N',0],['E',90],['S',180],['W',270]].forEach(([l,d]) => {
+    const [x,y] = pt(d, R+12); h += txt(x,y+3,l,cText2,9);
+  });
+
+  // Runway axis
+  const [rx1,ry1] = pt(rwyHdg,      R-2);
+  const [rx2,ry2] = pt(rwyHdg+180,  R-2);
+  h += line(rx1,ry1,rx2,ry2,cAccent4,2.5,'5,3');
+  // Runway designator (two-digit)
+  const des1 = String(Math.round(((rwyHdg+360)%360)/10)||36).padStart(2,'0');
+  const des2 = String(Math.round(((rwyHdg+180)%360)/10)||36).padStart(2,'0');
+  const [ld1x,ld1y] = pt(rwyHdg,     R+18); h += txt(ld1x,ld1y+3,des1,cAccent4,9);
+  const [ld2x,ld2y] = pt(rwyHdg+180, R+18); h += txt(ld2x,ld2y+3,des2,cAccent4,9);
+
+  // Wind arrow (FROM wind direction toward center)
+  if (windDir != null) {
+    const [wx,wy] = pt(windDir, R*0.80);
+    h += `<line x1="${wx.toFixed(1)}" y1="${wy.toFixed(1)}"
+                x2="${(cx).toFixed(1)}" y2="${(cy).toFixed(1)}"
+                stroke="${cAccent}" stroke-width="3" stroke-linecap="round"
+                marker-end="url(#rw-arr)"/>`;
+    // Wind speed label at arrow tail
+    const [tlx,tly] = pt(windDir, R*0.78+10);
+    if (windSpd != null)
+      h += txt(wx,wy-7, Math.round(windSpd)+'kn', cAccent, 8);
+  }
+
+  svg.innerHTML = h;
 }
 
 // ─────────────────────────────────────────────
