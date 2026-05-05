@@ -3196,7 +3196,7 @@ function renderMet(data) {
 //  METAR GENERATION
 // ─────────────────────────────────────────────
 // Baut einen ICAO-METAR-String (europäisches Format) aus einem geparsten MWS-Datensatz.
-// Wolkenhöhen aus CL-Feldern werden als Fuß behandelt (Intellisense-Ceilometer-Ausgabe).
+// Wolkenhöhen aus CL-Feldern sind in Metern; Umrechnung zu hft erfolgt in buildMETAR.
 // Sicht in Metern (4-stellig), QNH mit Q-Präfix, Taupunkt aus Magnus-Formel.
 function buildMETAR(r, stationId) {
   if (!r.datetime) return null;
@@ -3255,8 +3255,9 @@ function buildMETAR(r, stationId) {
 
   // CAVOK: Sicht ≥ 10 km, keine Wolken unter 5000 ft, kein signifikantes WX
   const visMtr = r.visMi != null ? r.visMi * 1609.34 : null;
-  // ceilH-Werte aus Paketen sind in Fuß (Intellisense-Ceilometer)
-  const ceilFt = (r.ceilH || []).filter(h => h != null);
+  // ceilH-Werte sind in Metern (Umrechnung zu Fuß für METAR nötig)
+  const ceilM  = (r.ceilH || []).filter(h => h != null);
+  const ceilFt = ceilM.map(m => m * 3.28084);
   const lowestFt = ceilFt.length > 0 ? Math.min(...ceilFt) : null;
   const hasSigWX = !!r.presentWeather;
   const isCavok = visMtr != null && visMtr >= 10000
