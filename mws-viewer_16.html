@@ -3145,8 +3145,6 @@ function drawWindRose(rwyHdg, windDir, windSpd, gustSpd) {
 
   // Outer ring
   h += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${cBorder}" stroke-width="1.5"/>`;
-  // Inner reference ring
-  h += `<circle cx="${cx}" cy="${cy}" r="${Math.round(R*0.52)}" fill="none" stroke="${cBorder}" stroke-width="0.8" stroke-dasharray="3,4" opacity="0.5"/>`;
 
   // Tick marks every 10°, major every 30°
   for (let d = 0; d < 360; d += 10) {
@@ -3170,7 +3168,7 @@ function drawWindRose(rwyHdg, windDir, windSpd, gustSpd) {
     h += txt(x, y, l, cText2, 13, 'bold');
   });
 
-  // Runway axis (dashed)
+  // Runway axis (dashed, full chord)
   if (rwyHdg != null) {
     const [rx1,ry1] = pt(rwyHdg,     R - 1);
     const [rx2,ry2] = pt(rwyHdg+180, R - 1);
@@ -3181,10 +3179,15 @@ function drawWindRose(rwyHdg, windDir, windSpd, gustSpd) {
     const [d2x,d2y] = pt(rwyHdg+180, R + 22); h += txt(d2x,d2y,des2,cAccent4,12,'bold');
   }
 
-  // Wind arrow: tail at ring edge, head stops before center overlay (~55% of R)
+  // Opaque centre disc — covers runway line where the text overlay sits
+  const discR = Math.round(R * 0.51);
+  h += `<circle cx="${cx}" cy="${cy}" r="${discR}" fill="var(--bg1)"/>`;
+  h += `<circle cx="${cx}" cy="${cy}" r="${discR}" fill="none" stroke="${cBorder}" stroke-width="0.8" opacity="0.4"/>`;
+
+  // Wind arrow: tail near outer ring, head touches disc edge
   if (windDir != null) {
     const [wx,wy] = pt(windDir, R - 3);
-    const [ax,ay] = pt(windDir, R * 0.56);
+    const [ax,ay] = pt(windDir, discR + 2);
     h += `<line x1="${wx.toFixed(1)}" y1="${wy.toFixed(1)}"
                x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}"
                stroke="${cAccent}" stroke-width="3" stroke-linecap="round"
