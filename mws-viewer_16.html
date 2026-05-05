@@ -291,20 +291,20 @@ tbody td.bad { color: var(--accent3); }
 }
 .db-header-time { font-size: 17px; font-family: var(--mono); color: var(--accent); font-weight: 700; }
 .db-header-meta { font-size: 11px; color: var(--text2); font-family: var(--mono); }
-.db-grid {
+.db-main-layout {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: 210px 1fr 210px;
+  gap: 14px;
+  align-items: stretch;
 }
-@media (max-width: 900px) { .db-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 520px)  { .db-grid { grid-template-columns: 1fr; } }
-.db-card {
+.db-side-col { display: flex; flex-direction: column; gap: 10px; }
+.db-side-block {
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 14px 16px;
+  border-radius: 6px; padding: 12px 16px; flex: 1; min-height: 0;
 }
-.db-card-title {
+.db-block-title {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em;
-  color: var(--text2); margin-bottom: 12px;
+  color: var(--text2); margin-bottom: 10px;
 }
 .db-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
 .db-label { font-size: 11px; color: var(--text2); white-space: nowrap; }
@@ -312,33 +312,34 @@ tbody td.bad { color: var(--accent3); }
 .db-val-md{ font-family: var(--mono); font-size: 18px; color: var(--text1); }
 .db-val-sm{ font-family: var(--mono); font-size: 14px; color: var(--text1); }
 .db-sep   { border: none; border-top: 1px solid var(--border); margin: 9px 0; }
-.db-wind-main { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
-.db-wind-dir  { font-family: var(--mono); font-size: 40px; font-weight: 700; color: var(--accent); line-height: 1; }
-.db-wind-spd  { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--text1); }
-.db-wind-unit { font-size: 13px; color: var(--text2); }
-.db-wx-code   { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--accent); }
-.db-rwy-card  {
-  margin-top: 10px; background: var(--bg2);
-  border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px;
+.db-big-val { font-family: var(--mono); font-size: 30px; font-weight: 700; color: var(--accent); line-height: 1.1; margin-bottom: 6px; }
+.db-big-val .db-unit { font-size: 13px; color: var(--text2); margin-left: 3px; }
+.db-wx-code { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+.db-compass-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.db-compass-wrap { position: relative; width: 100%; max-width: 380px; }
+#db-wind-rose { width: 100%; height: auto; display: block; }
+.db-compass-overlay {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center; pointer-events: none; width: 110px;
 }
-.db-rwy-inner { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; }
-@media (max-width: 640px) { .db-rwy-inner { grid-template-columns: 1fr; } }
-.db-rwy-input { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.db-center-spd { line-height: 1; margin-bottom: 4px; }
+.db-center-spd-val { font-family: var(--mono); font-size: 30px; font-weight: 700; color: var(--text1); }
+.db-center-unit { font-size: 11px; color: var(--text2); }
+.db-center-hw  { font-family: var(--mono); font-size: 13px; font-weight: 700; margin: 1px 0; }
+.db-center-cw  { font-family: var(--mono); font-size: 13px; color: var(--accent4); margin: 1px 0; }
+.db-center-gust{ font-family: var(--mono); font-size: 11px; color: var(--text2); }
+.db-rwy-input { display: flex; align-items: center; gap: 8px; }
 .db-rwy-input label { font-size: 11px; color: var(--text2); }
 .db-rwy-input input {
-  font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--accent);
+  font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--accent);
   background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
-  width: 80px; padding: 4px 8px; text-align: center;
+  width: 70px; padding: 3px 6px; text-align: center;
 }
-.db-rwy-input span { font-size: 14px; color: var(--text2); }
-.db-comp-grid { display: grid; grid-template-columns: auto auto; gap: 8px 32px; align-items: baseline; }
-.db-comp-row  { display: flex; flex-direction: column; gap: 2px; }
-.db-comp-label{ font-size: 10px; color: var(--text2); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.05em; }
-.db-comp-val  { font-family: var(--mono); font-size: 22px; font-weight: 700; }
-.db-comp-sub  { font-family: var(--mono); font-size: 15px; }
-.db-hw-pos    { color: var(--accent2); }
-.db-hw-neg    { color: var(--accent3); }
-.db-cw-val    { color: var(--accent4); }
+.db-rwy-input span { font-size: 13px; color: var(--text2); }
+.db-hw-pos { color: var(--accent2); }
+.db-hw-neg { color: var(--accent3); }
+.db-cw-val { color: var(--accent4); }
 
 /* ── CHARTS ── */
 .chart-grid {
@@ -1130,128 +1131,106 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         <span class="db-header-time" id="db-time">—</span>
         <span class="db-header-meta" id="db-meta">—</span>
       </div>
-      <div class="db-grid">
+      <div class="db-main-layout">
 
-        <!-- Wind -->
-        <div class="db-card">
-          <div class="db-card-title">Wind</div>
-          <div class="db-wind-main">
-            <span class="db-wind-dir" id="db-wdir-mag">—</span>
-            <span class="db-wind-unit">° mag.</span>
-            <span style="margin-left:6px">
-              <span class="db-wind-spd" id="db-wspd">—</span>
-              <span class="db-wind-unit"> kn</span>
-            </span>
+        <!-- LEFT COLUMN -->
+        <div class="db-side-col">
+          <div class="db-side-block">
+            <div class="db-block-title">Wind</div>
+            <div class="db-big-val"><span id="db-wdir-mag">—</span><span class="db-unit">° mag</span></div>
+            <div class="db-row">
+              <span class="db-label">Böe</span>
+              <span class="db-val-md" id="db-gust">—</span>
+            </div>
+            <hr class="db-sep">
+            <div class="db-row">
+              <span class="db-label">Richtung rechtw.</span>
+              <span class="db-val-sm" id="db-wdir-true">—</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Böenrichtung</span>
+              <span class="db-val-sm" id="db-gustdir-mag">—</span>
+            </div>
           </div>
-          <div class="db-row" style="margin-bottom:3px">
-            <span class="db-label">Böe</span>
-            <span class="db-val-md" id="db-gust">—</span>
+          <div class="db-side-block">
+            <div class="db-block-title">Luftdruck</div>
+            <div class="db-row">
+              <span class="db-label">QFE</span>
+              <span class="db-val" id="db-qfe">—</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">QNH</span>
+              <span class="db-val-md" id="db-qnh">—</span>
+            </div>
           </div>
-          <hr class="db-sep">
-          <div class="db-row">
-            <span class="db-label">Richtung rechtw.</span>
-            <span class="db-val-sm" id="db-wdir-true">—</span>
+          <div class="db-side-block">
+            <div class="db-block-title">Temperatur</div>
+            <div class="db-big-val"><span id="db-temp">—</span></div>
           </div>
-          <div class="db-row">
-            <span class="db-label">Böenrichtung mag.</span>
-            <span class="db-val-sm" id="db-gustdir-mag">—</span>
-          </div>
-        </div>
+        </div><!-- left -->
 
-        <!-- Temperatur -->
-        <div class="db-card">
-          <div class="db-card-title">Temperatur</div>
-          <div class="db-row">
-            <span class="db-label">OAT</span>
-            <span class="db-val" id="db-temp">—</span>
-          </div>
-          <div class="db-row">
-            <span class="db-label">Taupunkt</span>
-            <span class="db-val-md" id="db-dp">—</span>
-          </div>
-          <div class="db-row">
-            <span class="db-label">Rel. Feuchte</span>
-            <span class="db-val-sm" id="db-rh">—</span>
-          </div>
-        </div>
-
-        <!-- Druck / Höhe -->
-        <div class="db-card">
-          <div class="db-card-title">Druck / Druckhöhe</div>
-          <div class="db-row">
-            <span class="db-label">QFE</span>
-            <span class="db-val" id="db-qfe">—</span>
-          </div>
-          <div class="db-row">
-            <span class="db-label">QNH</span>
-            <span class="db-val-md" id="db-qnh">—</span>
-          </div>
-          <hr class="db-sep">
-          <div class="db-row">
-            <span class="db-label">PA</span>
-            <span class="db-val-sm" id="db-pa">—</span>
-          </div>
-          <div class="db-row">
-            <span class="db-label">DA</span>
-            <span class="db-val-sm" id="db-da">—</span>
-          </div>
-        </div>
-
-        <!-- Wetter / Sicht -->
-        <div class="db-card">
-          <div class="db-card-title">Wetter / Sicht</div>
-          <div style="margin-bottom:12px">
-            <span class="db-wx-code" id="db-wx">—</span>
-          </div>
-          <div class="db-row">
-            <span class="db-label">Sicht</span>
-            <span class="db-val-md" id="db-vis">—</span>
-          </div>
-          <hr class="db-sep">
-          <div class="db-row">
-            <span class="db-label">Untergrenze</span>
-            <span class="db-val-sm" id="db-ceil">—</span>
-          </div>
-          <div class="db-row">
-            <span class="db-label">Ceil.-Status</span>
-            <span class="db-val-sm" id="db-ceilstatus">—</span>
-          </div>
-        </div>
-
-      </div><!-- db-grid -->
-
-      <!-- Runway wind components -->
-      <div class="db-rwy-card">
-        <div class="db-card-title">Windkomponenten Runway</div>
-        <div class="db-rwy-inner">
+        <!-- CENTER: Compass -->
+        <div class="db-compass-col">
           <div class="db-rwy-input">
             <label>Runway QFU (mag.)</label>
             <input type="number" id="db-rwy-hdg" min="10" max="360" step="10" value="360"
                    oninput="updateRwyComponents()">
             <span>°</span>
           </div>
-          <div class="db-comp-grid">
-            <div class="db-comp-row">
-              <span class="db-comp-label">Headwind / Tailwind</span>
-              <span id="db-hw" class="db-comp-val">—</span>
-            </div>
-            <div class="db-comp-row">
-              <span class="db-comp-label">Crosswind</span>
-              <span id="db-cw" class="db-comp-val db-cw-val">—</span>
-            </div>
-            <div class="db-comp-row">
-              <span class="db-comp-label">Böe HW / TW</span>
-              <span id="db-gust-hw" class="db-comp-sub">—</span>
-            </div>
-            <div class="db-comp-row">
-              <span class="db-comp-label">Böe CW</span>
-              <span id="db-gust-cw" class="db-comp-sub db-cw-val">—</span>
+          <div class="db-compass-wrap">
+            <svg id="db-wind-rose" viewBox="0 0 300 300"></svg>
+            <div class="db-compass-overlay">
+              <div class="db-center-spd">
+                <span id="db-wspd" class="db-center-spd-val">—</span><span class="db-center-unit"> kn</span>
+              </div>
+              <div id="db-hw" class="db-center-hw">—</div>
+              <div id="db-cw" class="db-center-cw">—</div>
+              <div id="db-gust-hw" class="db-center-gust">—</div>
+              <div id="db-gust-cw" class="db-center-gust db-cw-val">—</div>
             </div>
           </div>
-          <svg id="db-wind-rose" width="150" height="150" style="flex-shrink:0"></svg>
-        </div>
-      </div>
+        </div><!-- center -->
 
+        <!-- RIGHT COLUMN -->
+        <div class="db-side-col">
+          <div class="db-side-block">
+            <div class="db-block-title">Wetter / Sicht</div>
+            <div class="db-wx-code" id="db-wx">—</div>
+            <div class="db-row">
+              <span class="db-label">Sicht</span>
+              <span class="db-val-md" id="db-vis">—</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Untergrenze</span>
+              <span class="db-val-sm" id="db-ceil">—</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Ceil.-Status</span>
+              <span class="db-val-sm" id="db-ceilstatus">—</span>
+            </div>
+          </div>
+          <div class="db-side-block">
+            <div class="db-block-title">Druckhöhe</div>
+            <div class="db-row">
+              <span class="db-label">PA</span>
+              <span class="db-val" id="db-pa">—</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">DA</span>
+              <span class="db-val-md" id="db-da">—</span>
+            </div>
+          </div>
+          <div class="db-side-block">
+            <div class="db-block-title">Feuchte</div>
+            <div class="db-big-val"><span id="db-dp">—</span></div>
+            <div class="db-row">
+              <span class="db-label">Rel. Feuchte</span>
+              <span class="db-val-md" id="db-rh">—</span>
+            </div>
+          </div>
+        </div><!-- right -->
+
+      </div><!-- db-main-layout -->
     </div><!-- db-content -->
   </div><!-- panel-dashboard -->
 
@@ -3122,12 +3101,12 @@ function updateRwyComponents() {
 
   const hwEl = document.getElementById('db-hw');
   const hwRes = fmtHW(wind, true);
-  if (hwEl) { hwEl.textContent = hwRes.text; hwEl.className = `db-comp-val ${hwRes.cls}`; }
+  if (hwEl) { hwEl.textContent = hwRes.text; hwEl.className = `db-center-hw ${hwRes.cls}`; }
   const setT = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   setT('db-cw',       fmtCW(wind));
   const gustHW = fmtHW(gust, false);
   const ghEl = document.getElementById('db-gust-hw');
-  if (ghEl) { ghEl.textContent = gustHW.text; ghEl.className = `db-comp-sub ${gustHW.cls}`; }
+  if (ghEl) { ghEl.textContent = gustHW.text; ghEl.className = `db-center-gust ${gustHW.cls}`; }
   setT('db-gust-cw',  fmtCW(gust));
 
   drawWindRose(rwyHdg, r.windDir, r.windKt, r.gustKt);
@@ -3136,65 +3115,77 @@ function updateRwyComponents() {
 function drawWindRose(rwyHdg, windDir, windSpd, gustSpd) {
   const svg = document.getElementById('db-wind-rose');
   if (!svg) return;
-  const cx = 75, cy = 75, R = 58;
+  const cx = 150, cy = 150, R = 116;
 
-  const pt = (deg, radius) => {
+  const pt = (deg, r) => {
     const rad = (deg - 90) * Math.PI / 180;
-    return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+    return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
   };
   const line = (x1,y1,x2,y2,col,w,dash='') =>
     `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
       stroke="${col}" stroke-width="${w}" stroke-dasharray="${dash}" stroke-linecap="round"/>`;
-  const txt = (x,y,t,col,sz,anchor='middle') =>
-    `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}"
-      fill="${col}" font-size="${sz}" font-family="monospace">${t}</text>`;
+  const txt = (x,y,t,col,sz,weight='normal') =>
+    `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle"
+      fill="${col}" font-size="${sz}" font-family="monospace" font-weight="${weight}">${t}</text>`;
 
-  // CSS variable fallbacks for SVG (inline SVG can use CSS vars in attributes)
   const cAccent  = 'var(--accent)';
   const cAccent4 = 'var(--accent4)';
-  const cAccent2 = 'var(--accent2)';
-  const cAccent3 = 'var(--accent3)';
   const cBorder  = 'var(--border)';
   const cText2   = 'var(--text2)';
+  const cText3   = 'var(--text3)';
 
   let h = `<defs>
-    <marker id="rw-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-      <polygon points="0,0 7,3.5 0,7" fill="${cAccent}"/>
+    <marker id="rw-arr" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <polygon points="0,0 9,4.5 0,9" fill="${cAccent}"/>
     </marker>
   </defs>`;
 
-  // Background circle + tick marks
+  // Outer ring
   h += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${cBorder}" stroke-width="1.5"/>`;
-  for (let d = 0; d < 360; d += 30) {
-    const [ox,oy] = pt(d, R); const [ix,iy] = pt(d, R - (d%90===0?8:4));
-    h += line(ox,oy,ix,iy,cBorder,1);
+  // Inner reference ring
+  h += `<circle cx="${cx}" cy="${cy}" r="${Math.round(R*0.52)}" fill="none" stroke="${cBorder}" stroke-width="0.8" stroke-dasharray="3,4" opacity="0.5"/>`;
+
+  // Tick marks every 10°, major every 30°
+  for (let d = 0; d < 360; d += 10) {
+    const isMajor = d % 30 === 0;
+    const [ox,oy] = pt(d, R);
+    const [ix,iy] = pt(d, R - (isMajor ? 11 : 5));
+    h += line(ox,oy,ix,iy,cBorder, isMajor ? 1.5 : 0.8);
   }
-  // Cardinal labels
+
+  // Degree numbers at 30° intervals (skip cardinal positions)
+  const cardSet = new Set([0, 90, 180, 270]);
+  for (let d = 0; d < 360; d += 30) {
+    if (cardSet.has(d)) continue;
+    const [x,y] = pt(d, R - 20);
+    h += txt(x, y, String(d).padStart(3,'0'), cText3, 10);
+  }
+
+  // Cardinal labels N E S W
   [['N',0],['E',90],['S',180],['W',270]].forEach(([l,d]) => {
-    const [x,y] = pt(d, R+12); h += txt(x,y+3,l,cText2,9);
+    const [x,y] = pt(d, R - 20);
+    h += txt(x, y, l, cText2, 13, 'bold');
   });
 
-  // Runway axis
-  const [rx1,ry1] = pt(rwyHdg,      R-2);
-  const [rx2,ry2] = pt(rwyHdg+180,  R-2);
-  h += line(rx1,ry1,rx2,ry2,cAccent4,2.5,'5,3');
-  // Runway designator (two-digit)
-  const des1 = String(Math.round(((rwyHdg+360)%360)/10)||36).padStart(2,'0');
-  const des2 = String(Math.round(((rwyHdg+180)%360)/10)||36).padStart(2,'0');
-  const [ld1x,ld1y] = pt(rwyHdg,     R+18); h += txt(ld1x,ld1y+3,des1,cAccent4,9);
-  const [ld2x,ld2y] = pt(rwyHdg+180, R+18); h += txt(ld2x,ld2y+3,des2,cAccent4,9);
+  // Runway axis (dashed)
+  if (rwyHdg != null) {
+    const [rx1,ry1] = pt(rwyHdg,     R - 1);
+    const [rx2,ry2] = pt(rwyHdg+180, R - 1);
+    h += line(rx1,ry1,rx2,ry2,cAccent4,2.5,'7,4');
+    const des1 = String(Math.round(((rwyHdg % 360)+360)%360/10)||36).padStart(2,'0');
+    const des2 = String(Math.round(((rwyHdg+180)%360)/10)||36).padStart(2,'0');
+    const [d1x,d1y] = pt(rwyHdg,     R + 22); h += txt(d1x,d1y,des1,cAccent4,12,'bold');
+    const [d2x,d2y] = pt(rwyHdg+180, R + 22); h += txt(d2x,d2y,des2,cAccent4,12,'bold');
+  }
 
-  // Wind arrow (FROM wind direction toward center)
+  // Wind arrow: tail at ring edge, head stops before center overlay (~55% of R)
   if (windDir != null) {
-    const [wx,wy] = pt(windDir, R*0.80);
+    const [wx,wy] = pt(windDir, R - 3);
+    const [ax,ay] = pt(windDir, R * 0.56);
     h += `<line x1="${wx.toFixed(1)}" y1="${wy.toFixed(1)}"
-                x2="${(cx).toFixed(1)}" y2="${(cy).toFixed(1)}"
-                stroke="${cAccent}" stroke-width="3" stroke-linecap="round"
-                marker-end="url(#rw-arr)"/>`;
-    // Wind speed label at arrow tail
-    const [tlx,tly] = pt(windDir, R*0.78+10);
-    if (windSpd != null)
-      h += txt(wx,wy-7, Math.round(windSpd)+'kn', cAccent, 8);
+               x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}"
+               stroke="${cAccent}" stroke-width="5" stroke-linecap="round"
+               marker-end="url(#rw-arr)"/>`;
   }
 
   svg.innerHTML = h;
