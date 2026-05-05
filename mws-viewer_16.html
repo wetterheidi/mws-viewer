@@ -1002,7 +1002,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   </div>
   <div class="source-row" id="qtm-row">
     <span class="source-label">Quantimet</span>
-    <select id="qtm-device" class="qtm-select"><option value="">— Gerät wählen —</option></select>
+    <select id="qtm-device" class="qtm-select" onchange="onQtmDeviceChange()"><option value="">— Gerät wählen —</option></select>
     <button class="btn-ghost btn-sm" onclick="loadQuantimetDevices()" title="Geräteliste aktualisieren">↻ Geräteliste</button>
     <button class="btn-primary btn-sm" onclick="loadFromQuantimet()">🌐 Laden</button>
     <span id="qtm-status" style="font-family:var(--mono);font-size:11px;color:var(--text3);"></span>
@@ -3320,6 +3320,35 @@ function clearAll() {
   document.getElementById('met-content').style.display   = 'none';
   document.getElementById('empty-metar').style.display   = '';
   document.getElementById('metar-content').style.display = 'none';
+}
+
+function onQtmDeviceChange() {
+  const imei = document.getElementById('qtm-device').value;
+  // Nichts tun wenn dasselbe Gerät nochmals gewählt oder kein Gerät geladen war
+  if (!activeImei || imei === activeImei) return;
+  // Sofort löschen — kein falsches Bild für den Nutzer
+  stopPolling();
+  activeImei = null;
+  allData    = [];
+  parsedData = [];
+  document.getElementById('qtm-status').textContent       = '';
+  document.getElementById('current-file').textContent     = 'Keine Datei geladen';
+  document.getElementById('reload-btn').style.display     = 'none';
+  document.getElementById('record-count').textContent     = '— records';
+  document.getElementById('status-dot').className         = 'status-dot';
+  document.getElementById('avail-text').textContent       = imei
+    ? 'Gerät gewählt — auf "🌐 Laden" klicken'
+    : 'Keine Daten geladen — CSV öffnen oder Rohdaten einfügen';
+  document.getElementById('poll-status').textContent      = '';
+  document.getElementById('empty-table').style.display    = '';
+  document.getElementById('table-wrap').style.display     = 'none';
+  document.getElementById('empty-station').style.display  = '';
+  document.getElementById('station-content').style.display= 'none';
+  document.getElementById('empty-met').style.display      = '';
+  document.getElementById('met-content').style.display    = 'none';
+  document.getElementById('empty-metar').style.display    = '';
+  document.getElementById('metar-content').style.display  = 'none';
+  updateAlertBanner([]);
 }
 
 // Auto-load sample data on page open (in paste field, not auto-rendered)
