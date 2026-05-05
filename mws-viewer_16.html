@@ -281,6 +281,43 @@ tbody td.bad { color: var(--accent3); }
   margin-top: 2px;
 }
 
+/* ── DASHBOARD ── */
+#panel-dashboard { padding: 14px; }
+.db-empty { color: var(--text2); font-size: 13px; padding: 48px; text-align: center; }
+.db-header {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.db-header-time { font-size: 17px; font-family: var(--mono); color: var(--accent); font-weight: 700; }
+.db-header-meta { font-size: 11px; color: var(--text2); font-family: var(--mono); }
+.db-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 900px) { .db-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px)  { .db-grid { grid-template-columns: 1fr; } }
+.db-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 14px 16px;
+}
+.db-card-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--text2); margin-bottom: 12px;
+}
+.db-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+.db-label { font-size: 11px; color: var(--text2); white-space: nowrap; }
+.db-val   { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--accent); }
+.db-val-md{ font-family: var(--mono); font-size: 18px; color: var(--text1); }
+.db-val-sm{ font-family: var(--mono); font-size: 14px; color: var(--text1); }
+.db-sep   { border: none; border-top: 1px solid var(--border); margin: 9px 0; }
+.db-wind-main { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+.db-wind-dir  { font-family: var(--mono); font-size: 40px; font-weight: 700; color: var(--accent); line-height: 1; }
+.db-wind-spd  { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--text1); }
+.db-wind-unit { font-size: 13px; color: var(--text2); }
+.db-wx-code   { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--accent); }
+
 /* ── CHARTS ── */
 .chart-grid {
   display: grid;
@@ -1027,7 +1064,8 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 </div>
 
 <div id="tab-bar">
-  <div class="tab active" onclick="switchTab('table')">📋 Rohtabelle</div>
+  <div class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</div>
+  <div class="tab" onclick="switchTab('table')">📋 Rohtabelle</div>
   <div class="tab" onclick="switchTab('station')">📡 Station</div>
   <div class="tab" onclick="switchTab('met')">🌤 Meteorologie</div>
   <div class="tab" onclick="switchTab('metar')">✈️ METAR</div>
@@ -1063,7 +1101,106 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 <div id="content">
 
   <!-- TAB 1: TABLE -->
-  <div class="tab-panel active" id="panel-table">
+  <div class="tab-panel active" id="panel-dashboard">
+    <div id="db-empty" class="db-empty">Keine Daten geladen — CSV öffnen oder Quantimet-Gerät laden</div>
+    <div id="db-content" style="display:none">
+      <div class="db-header">
+        <span class="db-header-time" id="db-time">—</span>
+        <span class="db-header-meta" id="db-meta">—</span>
+      </div>
+      <div class="db-grid">
+
+        <!-- Wind -->
+        <div class="db-card">
+          <div class="db-card-title">Wind</div>
+          <div class="db-wind-main">
+            <span class="db-wind-dir" id="db-wdir-mag">—</span>
+            <span class="db-wind-unit">° mag.</span>
+            <span style="margin-left:6px">
+              <span class="db-wind-spd" id="db-wspd">—</span>
+              <span class="db-wind-unit"> kn</span>
+            </span>
+          </div>
+          <div class="db-row" style="margin-bottom:3px">
+            <span class="db-label">Böe</span>
+            <span class="db-val-md" id="db-gust">—</span>
+          </div>
+          <hr class="db-sep">
+          <div class="db-row">
+            <span class="db-label">Richtung rechtw.</span>
+            <span class="db-val-sm" id="db-wdir-true">—</span>
+          </div>
+          <div class="db-row">
+            <span class="db-label">Böenrichtung mag.</span>
+            <span class="db-val-sm" id="db-gustdir-mag">—</span>
+          </div>
+        </div>
+
+        <!-- Temperatur -->
+        <div class="db-card">
+          <div class="db-card-title">Temperatur</div>
+          <div class="db-row">
+            <span class="db-label">OAT</span>
+            <span class="db-val" id="db-temp">—</span>
+          </div>
+          <div class="db-row">
+            <span class="db-label">Taupunkt</span>
+            <span class="db-val-md" id="db-dp">—</span>
+          </div>
+          <div class="db-row">
+            <span class="db-label">Rel. Feuchte</span>
+            <span class="db-val-sm" id="db-rh">—</span>
+          </div>
+        </div>
+
+        <!-- Druck / Höhe -->
+        <div class="db-card">
+          <div class="db-card-title">Druck / Druckhöhe</div>
+          <div class="db-row">
+            <span class="db-label">QFE</span>
+            <span class="db-val" id="db-qfe">—</span>
+          </div>
+          <div class="db-row">
+            <span class="db-label">QNH</span>
+            <span class="db-val-md" id="db-qnh">—</span>
+          </div>
+          <hr class="db-sep">
+          <div class="db-row">
+            <span class="db-label">PA</span>
+            <span class="db-val-sm" id="db-pa">—</span>
+          </div>
+          <div class="db-row">
+            <span class="db-label">DA</span>
+            <span class="db-val-sm" id="db-da">—</span>
+          </div>
+        </div>
+
+        <!-- Wetter / Sicht -->
+        <div class="db-card">
+          <div class="db-card-title">Wetter / Sicht</div>
+          <div style="margin-bottom:12px">
+            <span class="db-wx-code" id="db-wx">—</span>
+          </div>
+          <div class="db-row">
+            <span class="db-label">Sicht</span>
+            <span class="db-val-md" id="db-vis">—</span>
+          </div>
+          <hr class="db-sep">
+          <div class="db-row">
+            <span class="db-label">Untergrenze</span>
+            <span class="db-val-sm" id="db-ceil">—</span>
+          </div>
+          <div class="db-row">
+            <span class="db-label">Ceil.-Status</span>
+            <span class="db-val-sm" id="db-ceilstatus">—</span>
+          </div>
+        </div>
+
+      </div><!-- db-grid -->
+    </div><!-- db-content -->
+  </div><!-- panel-dashboard -->
+
+  <div class="tab-panel" id="panel-table">
     <div class="empty" id="empty-table">
       <div class="icon">📭</div>
       <p>Keine Daten geladen — Pakete oben einfügen und auf "Laden" klicken</p>
@@ -2019,6 +2156,7 @@ function applyTimeFilter() {
     parsedData = [...allData];
   }
   document.getElementById('record-count').textContent = parsedData.length + ' records';
+  renderDashboard(parsedData);
   renderTable(parsedData);
   renderStation(parsedData);
   renderMet(parsedData);
@@ -2522,7 +2660,7 @@ function cvtVis(mi) {
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  const tabs=['table','station','met','metar','alerts','docs'];
+  const tabs=['dashboard','table','station','met','metar','alerts','docs'];
   document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
   document.getElementById('panel-'+id).classList.add('active');
   if (id==='alerts') {
@@ -2815,6 +2953,88 @@ function renderTable(data) {
 }
 
 // ─────────────────────────────────────────────
+//  RENDER DASHBOARD
+// ─────────────────────────────────────────────
+function renderDashboard(data) {
+  const emptyEl   = document.getElementById('db-empty');
+  const contentEl = document.getElementById('db-content');
+  if (!data.length) {
+    emptyEl.style.display = '';
+    contentEl.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  contentEl.style.display = '';
+
+  const r = [...data].sort((a, b) => b.datetime - a.datetime)[0];
+
+  const offWdir = parseFloat(document.getElementById('off-wdir')?.value) || 0;
+  const wrapDir = v => Math.round(((v + offWdir) % 360 + 360) % 360);
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  // Header
+  set('db-time', r.datetime
+    ? r.datetime.toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
+    : '—');
+  set('db-meta', [
+    r.msgNum  != null ? `Msg# ${r.msgNum}` : null,
+    r.battV   != null ? `Batt ${r.battV.toFixed(2)} V` : null,
+    r.opMode  != null ? `Modus ${r.opMode}` : null,
+  ].filter(Boolean).join('  ·  '));
+
+  // ── Wind ──────────────────────────────────
+  set('db-wdir-mag',    r.windDir  != null ? r.windDir + '°'       : '—');
+  set('db-wspd',        r.windKt   != null ? r.windKt.toFixed(0)   : '—');
+  set('db-gust',        r.gustKt   != null ? r.gustKt.toFixed(0) + ' kn' : '—');
+  set('db-wdir-true',   r.windDir  != null ? wrapDir(r.windDir) + '°' : '—');
+  set('db-gustdir-mag', r.gustDir  != null ? r.gustDir + '°'      : '—');
+
+  // ── Temperatur ────────────────────────────
+  set('db-temp', r.tempC != null ? r.tempC.toFixed(1) + ' °C' : '—');
+  const dp = calcDewpoint(r.tempC, r.rh);
+  set('db-dp', dp != null ? dp.toFixed(1) + ' °C' : '—');
+  set('db-rh', r.rh != null ? r.rh + ' %' : '—');
+
+  // ── Druck / Höhe ──────────────────────────
+  const qfe = r.pressHPa;
+  const qnh = r.altimInHg != null ? r.altimInHg * 33.8639 : null;
+  set('db-qfe', qfe != null ? Math.round(qfe) + ' hPa' : '—');
+  set('db-qnh', qnh != null ? Math.round(qnh) + ' hPa' : '—');
+
+  let pa = null, da = null;
+  if (qfe != null) {
+    pa = Math.round((1 - Math.pow(qfe / 1013.25, 0.190284)) * 145366.45);
+    if (r.tempC != null) {
+      const tIsa = 15 - 0.001981 * pa;
+      da = Math.round(pa + 118.8 * (r.tempC - tIsa));
+    }
+  }
+  set('db-pa', pa != null ? pa.toLocaleString() + ' ft' : '—');
+  set('db-da', da != null ? da.toLocaleString() + ' ft' : '—');
+
+  // ── Wetter / Sicht ────────────────────────
+  set('db-wx', r.presentWeather || 'SKC');
+
+  if (r.visMi != null) {
+    const visM = Math.round(r.visMi * 1609.34);
+    set('db-vis', visM >= 10000 ? '≥ 10 km'
+      : visM >= 1000 ? (r.visMi * 1.60934).toFixed(1) + ' km'
+      : visM + ' m');
+  } else {
+    set('db-vis', '—');
+  }
+
+  const ceilM = (r.ceilH || []).filter(h => h != null);
+  if (ceilM.length > 0) {
+    const lowestFt = Math.round(Math.min(...ceilM) * 3.28084);
+    set('db-ceil', lowestFt.toLocaleString() + ' ft AGL');
+  } else {
+    set('db-ceil', 'keine Wolken');
+  }
+  set('db-ceilstatus', r.ceilStatus ?? '—');
+}
+
+// ─────────────────────────────────────────────
 //  RENDER STATION TAB
 // ─────────────────────────────────────────────
 function renderStation(data) {
@@ -2892,6 +3112,7 @@ function renderStation(data) {
 // ─────────────────────────────────────────────
 function redrawMet() {
   if(!parsedData.length) return;
+  renderDashboard(parsedData);
   const data=parsedData;
   const lbl=labels(data);
 
