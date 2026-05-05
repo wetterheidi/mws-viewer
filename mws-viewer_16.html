@@ -1677,7 +1677,9 @@ function showLastRaw() {
   const el = document.getElementById('raw-last-out');
   if (!lastRawText) { el.value = 'Noch keine Quantimet-Daten geladen.'; return; }
   const lines = lastRawText.split('\n').map(l => l.trim()).filter(Boolean);
-  el.value = lines[lines.length - 1] || '(leer)';
+  // Prefer last packet with a valid timestamp (T: not T:-) to skip GPS-loss packets
+  const valid = lines.filter(l => /T:\d{2}\/\d{2}\/\d{2}/.test(l));
+  el.value = (valid.length ? valid[valid.length - 1] : lines[lines.length - 1]) || '(leer)';
 }
 
 // magnetic declination state
@@ -3278,10 +3280,11 @@ function buildMETAR(r, stationId) {
     } else {
       // Bedeckungsgrad nicht im Rohdatenstring enthalten → ///NNN (ICAO Annex 3, Auto-Station)
       const sorted = [...ceilFt].sort((a, b) => a - b);
+      const seen = new Set();
       sorted.forEach(hFt => {
         const hRounded = Math.max(100, Math.round(hFt / 100) * 100);
         const code = String(Math.round(hRounded / 100)).padStart(3, '0');
-        parts.push(`///${code}`);
+        if (!seen.has(code)) { seen.add(code); parts.push(`///${code}`); }
       });
     }
   }
