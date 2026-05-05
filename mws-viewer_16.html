@@ -1174,10 +1174,13 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
               <input type="number" id="off-wind" value="0" step="0.1" onchange="redrawMet()">
               <span style="font-size:11px;color:var(--text3)">kn</span>
             </div>
-            <div class="offset-item">
-              <label>Winddir</label>
-              <input type="number" id="off-wdir" value="0" step="1" min="-359" max="359" onchange="redrawMet()">
-              <span style="font-size:11px;color:var(--text3)">°</span>
+            <div class="offset-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+              <div style="display:flex;align-items:center;gap:4px">
+                <label>Winddir</label>
+                <input type="number" id="off-wdir" value="0" step="1" min="-359" max="359" onchange="redrawMet()">
+                <span style="font-size:11px;color:var(--text3)">°</span>
+              </div>
+              <span id="decl-info" style="font-size:10px;color:var(--text3);font-family:var(--mono);display:none"></span>
             </div>
             <div class="offset-item">
               <label>Sicht</label>
@@ -1335,6 +1338,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         </table>
         <h3 class="doc-h3">Offset-Korrektur</h3>
         <p>Lineare Offsets werden auf den Rohwert addiert, bevor die Einheitenkonvertierung erfolgt. Ein Windrichtungs-Offset wird modulo 360° gewrappt. Alle Offsets beeinflussen Tabelle und Charts gleichzeitig.</p>
+        <p><strong>Missweisung (magnetische Deklination):</strong> Die MWS gibt Windrichtungen in <em>magnetisch</em> aus. Sobald GPS-Koordinaten in den Daten vorhanden sind, berechnet der Viewer die lokale Missweisung automatisch über die NOAA IGRF-API und trägt sie als Windrichtungs-Offset ein. Der Wert wird unterhalb des Feldes angezeigt («Missweisung: +X.X° (NOAA IGRF)»). Manuell geänderte Werte werden nicht überschrieben. Bei fehlender Internetverbindung erscheint ein Hinweis; der Wert kann dann manuell eingetragen werden. Die berechnete Missweisung wird 30 Tage im Browser-Cache gespeichert.</p>
       </div>
 
       <div class="doc-section">
@@ -1664,6 +1668,11 @@ let timeFilter = { mode: 'all', hours: 0, from: null, to: null };
 let activeSource = 'file';   // 'file' | 'quantimet'
 let activeImei   = null;
 
+// magnetic declination state
+let _declLat      = null;
+let _declLon      = null;
+let _lastAutoDecl = null;   // last value we auto-filled, so manual override isn't clobbered
+
 const units = { temp:'C', pres:'hPa', wind:'kt', vis:'mi', ceil:'m', precip:'inh' };
 const chartInstances = {};
 
@@ -1918,6 +1927,56 @@ function validateAll(records) {
 }
 
 // ─────────────────────────────────────────────
+//  MAGNETIC DECLINATION
+// ─────────────────────────────────────────────
+async function calcMagDeclination(lat, lon) {
+  const cacheKey = `mws-decl-${Math.round(lat*10)}-${Math.round(lon*10)}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    const c = JSON.parse(cached);
+    // cache valid for 30 days
+    if (Date.now() - c.ts < 30 * 86400000) return { decl: c.decl, source: 'NOAA IGRF (Cache)' };
+  }
+  const url = `https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&resultFormat=json`;
+  const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const json = await resp.json();
+  const decl = json.result[0].declination;
+  localStorage.setItem(cacheKey, JSON.stringify({ decl, ts: Date.now() }));
+  return { decl, source: 'NOAA IGRF' };
+}
+
+async function maybeUpdateDeclination(lat, lon) {
+  if (lat == null || lon == null) return;
+  // skip if position unchanged (within ~11 km)
+  if (_declLat !== null && Math.abs(lat - _declLat) < 0.1 && Math.abs(lon - _declLon) < 0.1) return;
+  _declLat = lat;
+  _declLon = lon;
+
+  const infoEl = document.getElementById('decl-info');
+  const wdirEl = document.getElementById('off-wdir');
+  infoEl.style.display = '';
+
+  try {
+    const { decl, source } = await calcMagDeclination(lat, lon);
+    const rounded = Math.round(decl * 10) / 10;
+    const sign    = rounded >= 0 ? '+' : '';
+    infoEl.textContent = `Missweisung: ${sign}${rounded}° (${source})`;
+    infoEl.title = `Automatisch berechnet für ${lat.toFixed(2)}°N ${lon.toFixed(2)}°E`;
+
+    // auto-fill only if field still at 0 or holds the previous auto value
+    const current = parseFloat(wdirEl.value) || 0;
+    if (current === 0 || current === _lastAutoDecl) {
+      wdirEl.value = rounded;
+      _lastAutoDecl = rounded;
+      redrawMet();
+    }
+  } catch {
+    infoEl.textContent = 'Missweisung: Offline — Wert manuell eintragen';
+  }
+}
+
+// ─────────────────────────────────────────────
 //  TIME FILTER
 // ─────────────────────────────────────────────
 function applyTimeFilter() {
@@ -1940,6 +1999,10 @@ function applyTimeFilter() {
   renderMetar(parsedData);
   updateAvailBar();
   checkAlerts(parsedData.length ? parsedData[parsedData.length-1] : null);
+
+  // auto-fill magnetic declination when GPS position is available
+  const gpsRec = allData.find(d => d.lat != null && d.lon != null);
+  if (gpsRec) maybeUpdateDeclination(gpsRec.lat, gpsRec.lon);
 }
 
 function updateAvailBar() {
@@ -3331,6 +3394,11 @@ function onQtmDeviceChange() {
   activeImei = null;
   allData    = [];
   parsedData = [];
+  _declLat = null; _declLon = null; _lastAutoDecl = null;
+  const declInfo = document.getElementById('decl-info');
+  if (declInfo) { declInfo.style.display = 'none'; declInfo.textContent = ''; }
+  const wdirEl = document.getElementById('off-wdir');
+  if (wdirEl) wdirEl.value = 0;
   document.getElementById('qtm-status').textContent       = '';
   document.getElementById('current-file').textContent     = 'Keine Datei geladen';
   document.getElementById('reload-btn').style.display     = 'none';
