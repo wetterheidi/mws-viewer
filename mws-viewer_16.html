@@ -1183,10 +1183,8 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
               <div class="db-center-spd">
                 <span id="db-wspd" class="db-center-spd-val">—</span><span class="db-center-unit"> kn</span>
               </div>
-              <div id="db-hw" class="db-center-hw">—</div>
-              <div id="db-cw" class="db-center-cw">—</div>
-              <div id="db-gust-hw" class="db-center-gust">—</div>
-              <div id="db-gust-cw" class="db-center-gust db-cw-val">—</div>
+              <div id="db-hw-line" class="db-center-hw">—</div>
+              <div id="db-cw-line" class="db-center-cw">—</div>
             </div>
           </div>
         </div><!-- center -->
@@ -3088,27 +3086,31 @@ function updateRwyComponents() {
   const wind = components(r.windKt, r.windDir);
   const gust = components(r.gustKt, r.gustDir ?? r.windDir);
 
-  const fmtHW = (c, large) => {
-    if (!c) return { text: '—', cls: '' };
-    const isHW = c.hw >= 0;
-    const val  = Math.abs(c.hw).toFixed(large ? 0 : 0);
-    return { text: `${val} kn ${isHW ? '▲ HW' : '▼ TW'}`, cls: isHW ? 'db-hw-pos' : 'db-hw-neg' };
-  };
-  const fmtCW = c => {
-    if (!c) return '—';
-    const side = c.cw >= 0 ? '→ R' : '← L';
-    return `${Math.abs(c.cw).toFixed(0)} kn ${side}`;
-  };
+  const setH = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
 
-  const hwEl = document.getElementById('db-hw');
-  const hwRes = fmtHW(wind, true);
-  if (hwEl) { hwEl.textContent = hwRes.text; hwEl.className = `db-center-hw ${hwRes.cls}`; }
-  const setT = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  setT('db-cw',       fmtCW(wind));
-  const gustHW = fmtHW(gust, false);
-  const ghEl = document.getElementById('db-gust-hw');
-  if (ghEl) { ghEl.textContent = gustHW.text; ghEl.className = `db-center-gust ${gustHW.cls}`; }
-  setT('db-gust-cw',  fmtCW(gust));
+  // HW/TW line: "▲ HW 1 / G 1 kn"
+  if (wind) {
+    const isHW = wind.hw >= 0;
+    const cls  = isHW ? 'db-hw-pos' : 'db-hw-neg';
+    const sym  = isHW ? '▲' : '▼';
+    const lbl  = isHW ? 'HW' : 'TW';
+    const wv   = Math.abs(wind.hw).toFixed(0);
+    const gPart = gust ? ` / G ${Math.abs(gust.hw).toFixed(0)}` : '';
+    setH('db-hw-line', `<span class="${cls}">${sym} ${lbl} ${wv}${gPart} kn</span>`);
+  } else {
+    setH('db-hw-line', '—');
+  }
+
+  // CW line: "← CW 2 / G 4 kn L"
+  if (wind) {
+    const sym  = wind.cw >= 0 ? '→' : '←';
+    const side = wind.cw >= 0 ? 'R' : 'L';
+    const wv   = Math.abs(wind.cw).toFixed(0);
+    const gPart = gust ? ` / G ${Math.abs(gust.cw).toFixed(0)}` : '';
+    setH('db-cw-line', `<span class="db-cw-val">${sym} CW ${wv}${gPart} kn ${side}</span>`);
+  } else {
+    setH('db-cw-line', '—');
+  }
 
   drawWindRose(rwyHdg, r.windDir, r.windKt, r.gustKt);
 }
