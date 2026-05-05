@@ -1942,7 +1942,7 @@ function validateAll(records) {
 //  MAGNETIC DECLINATION
 // ─────────────────────────────────────────────
 async function calcMagDeclination(lat, lon) {
-  const cacheKey = `mws-decl-${Math.round(lat*10)}-${Math.round(lon*10)}`;
+  const cacheKey = `mws-decl2-${Math.round(lat*10)}-${Math.round(lon*10)}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     const c = JSON.parse(cached);
@@ -1983,7 +1983,7 @@ async function maybeUpdateDeclination(lat, lon) {
 
   try {
     const { decl, source } = await calcMagDeclination(lat, lon);
-    const rounded = Math.round(decl * 10) / 10;
+    const rounded = Math.round(decl);
     const sign    = rounded >= 0 ? '+' : '';
     infoEl.textContent = `Missweisung: ${sign}${rounded}° (${source})`;
     infoEl.title = `Automatisch berechnet für ${lat.toFixed(2)}°N ${lon.toFixed(2)}°E`;
@@ -2766,7 +2766,7 @@ function renderTable(data) {
   const windLabel = {'kt':'kn','ms':'m/s','kmh':'km/h','mph':'mph'}[units.wind];
   const visLabel  = {'mi':'mi','km':'km','m':'m'}[units.vis];
   const offWdir   = parseFloat(document.getElementById('off-wdir')?.value)||0;
-  const wrapDir   = v=>((v+offWdir)%360+360)%360;
+  const wrapDir   = v=>Math.round(((v+offWdir)%360+360)%360);
 
   const cols=[
     {k:'Zeit', fn:d=>d.datetime?d.datetime.toISOString().replace('T',' ').slice(0,16):'?'},
