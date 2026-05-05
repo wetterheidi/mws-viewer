@@ -904,9 +904,12 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 .cam-label    { font-family: var(--mono); font-size: 13px; font-weight: 700;
                 color: var(--accent); margin-bottom: 8px; }
 .cam-imgs     { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.cam-img-wrap { display: flex; flex-direction: column; gap: 4px; }
 .cam-img      { width: 100%; aspect-ratio: 4/3; object-fit: cover;
                 border-radius: 4px; border: 1px solid var(--border);
                 background: var(--bg2); display: block; }
+.cam-img-cap  { font-size: 11px; color: var(--text2); text-align: center;
+                font-family: var(--mono); }
 @media (max-width: 900px) { .cam-imgs { grid-template-columns: repeat(2, 1fr); } }
 
 /* ── DATA SOURCE SECTION ── */
@@ -2492,18 +2495,29 @@ async function loadCameraImages() {
       const imgs = document.createElement('div');
       imgs.className = 'cam-imgs';
 
+      const directions = ['Nord', 'Ost', 'Süd', 'West'];
       for (let c = 1; c <= 4; c++) {
+        const wrap = document.createElement('div');
+        wrap.className = 'cam-img-wrap';
+
         const img = document.createElement('img');
         img.className = 'cam-img';
-        img.alt = `Kamera ${c}`;
+        img.alt = `Kamera ${c} – ${directions[c-1]}`;
         img.onload = () => {
           set.style.display = '';
           visibleSets++;
           statusEl.textContent = `${visibleSets} Bildsatz/-sätze geladen`;
         };
-        img.onerror = () => { img.style.display = 'none'; };
+        img.onerror = () => { wrap.style.display = 'none'; };
         img.src = `${base}-${c}.jpg`;
-        imgs.appendChild(img);
+
+        const cap = document.createElement('div');
+        cap.className = 'cam-img-cap';
+        cap.textContent = directions[c-1];
+
+        wrap.appendChild(img);
+        wrap.appendChild(cap);
+        imgs.appendChild(wrap);
       }
 
       set.appendChild(imgs);
