@@ -1139,6 +1139,10 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
             <div class="db-block-title">Wind</div>
             <div class="db-big-val"><span id="db-wdir-mag">—</span><span class="db-unit">° mag</span></div>
             <div class="db-row">
+              <span class="db-label">Geschw.</span>
+              <span class="db-val-md" id="db-wspd-card">—</span>
+            </div>
+            <div class="db-row">
               <span class="db-label">Böe</span>
               <span class="db-val-md" id="db-gust">—</span>
             </div>
@@ -1146,10 +1150,6 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
             <div class="db-row">
               <span class="db-label">Richtung rechtw.</span>
               <span class="db-val-sm" id="db-wdir-true">—</span>
-            </div>
-            <div class="db-row">
-              <span class="db-label">Böenrichtung</span>
-              <span class="db-val-sm" id="db-gustdir-mag">—</span>
             </div>
           </div>
           <div class="db-side-block">
@@ -1221,7 +1221,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
             </div>
           </div>
           <div class="db-side-block">
-            <div class="db-block-title">Feuchte</div>
+            <div class="db-block-title">Taupunkt</div>
             <div class="db-big-val"><span id="db-dp">—</span></div>
             <div class="db-row">
               <span class="db-label">Rel. Feuchte</span>
@@ -3020,10 +3020,11 @@ function renderDashboard(data) {
 
   // ── Wind ──────────────────────────────────
   set('db-wdir-mag',    r.windDir  != null ? round10(((r.windDir % 360) + 360) % 360) + '°' : '—');
-  set('db-wspd',        r.windKt   != null ? r.windKt.toFixed(0)   : '—');
+  const wspdStr = r.windKt != null ? r.windKt.toFixed(0) + ' kn' : '—';
+  set('db-wspd',      wspdStr);
+  set('db-wspd-card', wspdStr);
   set('db-gust',        r.gustKt   != null ? r.gustKt.toFixed(0) + ' kn' : '—');
   set('db-wdir-true',   r.windDir  != null ? wrapDir(r.windDir) + '°' : '—');
-  set('db-gustdir-mag', r.gustDir  != null ? round10(((r.gustDir % 360) + 360) % 360) + '°' : '—');
 
   // ── Temperatur ────────────────────────────
   set('db-temp', r.tempC != null ? r.tempC.toFixed(1) + ' °C' : '—');
@@ -3135,8 +3136,8 @@ function drawWindRose(rwyHdg, windDir, windSpd, gustSpd) {
   const cText3   = 'var(--text3)';
 
   let h = `<defs>
-    <marker id="rw-arr" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
-      <polygon points="0,0 9,4.5 0,9" fill="${cAccent}"/>
+    <marker id="rw-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <polygon points="0,0 6,3 0,6" fill="${cAccent}"/>
     </marker>
   </defs>`;
 
@@ -3184,7 +3185,7 @@ function drawWindRose(rwyHdg, windDir, windSpd, gustSpd) {
     const [ax,ay] = pt(windDir, R * 0.56);
     h += `<line x1="${wx.toFixed(1)}" y1="${wy.toFixed(1)}"
                x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}"
-               stroke="${cAccent}" stroke-width="5" stroke-linecap="round"
+               stroke="${cAccent}" stroke-width="3" stroke-linecap="round"
                marker-end="url(#rw-arr)"/>`;
   }
 
