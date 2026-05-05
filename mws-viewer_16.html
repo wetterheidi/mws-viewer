@@ -1934,14 +1934,26 @@ async function calcMagDeclination(lat, lon) {
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     const c = JSON.parse(cached);
-    // cache valid for 30 days
     if (Date.now() - c.ts < 30 * 86400000) return { decl: c.decl, source: 'NOAA IGRF (Cache)' };
   }
-  const url = `https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&resultFormat=json`;
-  const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const json = await resp.json();
-  const decl = json.result[0].declination;
+
+  let decl;
+  // Use Flask proxy to avoid browser CORS restriction on NOAA domain.
+  // On file:// protocol there is no proxy — try NOAA directly (may still be blocked).
+  if (!IS_FILE_PROTOCOL) {
+    const resp = await fetch(`/api/declination?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`, { signal: AbortSignal.timeout(12000) });
+    if (!resp.ok) throw new Error(`Proxy HTTP ${resp.status}`);
+    const body = await resp.json();
+    if (body.error) throw new Error(body.error);
+    decl = body.declination;
+  } else {
+    const url = `https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&resultFormat=json`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`NOAA HTTP ${resp.status}`);
+    const json = await resp.json();
+    decl = json.result[0].declination;
+  }
+
   localStorage.setItem(cacheKey, JSON.stringify({ decl, ts: Date.now() }));
   return { decl, source: 'NOAA IGRF' };
 }

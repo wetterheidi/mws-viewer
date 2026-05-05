@@ -102,6 +102,29 @@ def get_devices() -> list:
 
 # ── API routes ─────────────────────────────────────────────────────────────────
 
+NOAA_DECL_URL = 'https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination'
+
+@app.route('/api/declination')
+def api_declination():
+    """Proxy NOAA IGRF magnetic declination lookup (avoids browser CORS restriction)."""
+    try:
+        lat = float(request.args['lat'])
+        lon = float(request.args['lon'])
+    except (KeyError, ValueError):
+        return jsonify({'error': 'lat and lon required'}), 400
+    try:
+        r = requests.get(
+            NOAA_DECL_URL,
+            params={'lat': round(lat, 4), 'lon': round(lon, 4), 'resultFormat': 'json'},
+            timeout=15,
+        )
+        r.raise_for_status()
+        decl = r.json()['result'][0]['declination']
+        return jsonify({'declination': decl})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
 @app.route('/api/devices')
 def api_devices():
     """Return simplified device list for the viewer's device picker."""
