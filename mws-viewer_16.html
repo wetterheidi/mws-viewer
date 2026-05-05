@@ -331,11 +331,11 @@ tbody td.bad { color: var(--accent3); }
   width: 80px; padding: 4px 8px; text-align: center;
 }
 .db-rwy-input span { font-size: 14px; color: var(--text2); }
-.db-comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
-.db-comp-row  { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.db-comp-label{ font-size: 11px; color: var(--text2); white-space: nowrap; }
-.db-comp-val  { font-family: var(--mono); font-size: 20px; font-weight: 700; }
-.db-comp-sub  { font-family: var(--mono); font-size: 14px; color: var(--text2); }
+.db-comp-grid { display: grid; grid-template-columns: auto auto; gap: 8px 32px; align-items: baseline; }
+.db-comp-row  { display: flex; flex-direction: column; gap: 2px; }
+.db-comp-label{ font-size: 10px; color: var(--text2); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.05em; }
+.db-comp-val  { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+.db-comp-sub  { font-family: var(--mono); font-size: 15px; }
 .db-hw-pos    { color: var(--accent2); }
 .db-hw-neg    { color: var(--accent3); }
 .db-cw-val    { color: var(--accent4); }
@@ -1226,7 +1226,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         <div class="db-rwy-inner">
           <div class="db-rwy-input">
             <label>Runway QFU (mag.)</label>
-            <input type="number" id="db-rwy-hdg" min="1" max="360" step="1" value="360"
+            <input type="number" id="db-rwy-hdg" min="10" max="360" step="10" value="360"
                    oninput="updateRwyComponents()">
             <span>°</span>
           </div>
@@ -3024,8 +3024,9 @@ function renderDashboard(data) {
 
   const r = [...data].sort((a, b) => b.datetime - a.datetime)[0];
 
-  const offWdir = parseFloat(document.getElementById('off-wdir')?.value) || 0;
-  const wrapDir = v => Math.round(((v + offWdir) % 360 + 360) % 360);
+  const offWdir  = parseFloat(document.getElementById('off-wdir')?.value) || 0;
+  const round10  = v => { const d = Math.round(v / 10) * 10; return d === 0 ? 360 : d; };
+  const wrapDir  = v => round10(((v + offWdir) % 360 + 360) % 360);
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
   // Header
@@ -3039,11 +3040,11 @@ function renderDashboard(data) {
   ].filter(Boolean).join('  ·  '));
 
   // ── Wind ──────────────────────────────────
-  set('db-wdir-mag',    r.windDir  != null ? r.windDir + '°'       : '—');
+  set('db-wdir-mag',    r.windDir  != null ? round10(((r.windDir % 360) + 360) % 360) + '°' : '—');
   set('db-wspd',        r.windKt   != null ? r.windKt.toFixed(0)   : '—');
   set('db-gust',        r.gustKt   != null ? r.gustKt.toFixed(0) + ' kn' : '—');
   set('db-wdir-true',   r.windDir  != null ? wrapDir(r.windDir) + '°' : '—');
-  set('db-gustdir-mag', r.gustDir  != null ? r.gustDir + '°'      : '—');
+  set('db-gustdir-mag', r.gustDir  != null ? round10(((r.gustDir % 360) + 360) % 360) + '°' : '—');
 
   // ── Temperatur ────────────────────────────
   set('db-temp', r.tempC != null ? r.tempC.toFixed(1) + ' °C' : '—');
