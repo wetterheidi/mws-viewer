@@ -131,9 +131,10 @@ def api_devices():
         result = []
         for d in raw:
             result.append({
-                'id':   d['id'],
-                'imei': d['imei'],
-                'name': d.get('name') or d['imei'],
+                'id':    d['id'],
+                'imei':  d['imei'],
+                'name':  d.get('name') or d['imei'],
+                'modem': d.get('modem', ''),
             })
         return jsonify(result)
     except Exception as exc:
