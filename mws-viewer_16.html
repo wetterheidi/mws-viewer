@@ -1314,6 +1314,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
             <button class="cmd-btn" onclick="sendCommand('M:0')">M:0 — Extended (3 h)</button>
             <button class="cmd-btn" onclick="sendCommand('M:1')">M:1 — Stündlich</button>
             <button class="cmd-btn" onclick="sendCommand('M:2')">M:2 — Kontinuierlich (20 min)</button>
+            <button class="cmd-btn" onclick="sendCommand('M:3')">M:3 — Rapid (5 min)</button>
           </div>
         </div>
 
@@ -1334,6 +1335,32 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
           <div class="cmd-buttons">
             <button class="cmd-btn" onclick="sendCommand('S:1')">S:1 — SPECI ein</button>
             <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('S:0')">S:0 — SPECI aus</button>
+          </div>
+        </div>
+
+        <div class="cmd-group">
+          <div class="cmd-group-label">Ceilometer</div>
+          <div class="cmd-buttons">
+            <button class="cmd-btn" onclick="sendCommand('C:1')">C:1 — Auto</button>
+            <button class="cmd-btn" onclick="sendCommand('C:2')">C:2 — Immer ein</button>
+            <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('C:0')">C:0 — Aus</button>
+          </div>
+        </div>
+
+        <div class="cmd-group">
+          <div class="cmd-group-label">GPS</div>
+          <div class="cmd-buttons">
+            <button class="cmd-btn" onclick="sendCommand('G:1')">G:1 — Pos.-Meldung ein</button>
+            <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('G:0')">G:0 — Pos.-Meldung aus</button>
+            <button class="cmd-btn" onclick="sendCommand('G:I')">G:I — Sofort-Update</button>
+            <button class="cmd-btn" onclick="sendCommand('G:i')">G:i — Sofort + Höhe</button>
+            <button class="cmd-btn" onclick="sendCommand('G:M')">G:M — Mittags-Update</button>
+            <button class="cmd-btn" onclick="sendCommand('G:m')">G:m — Mittags + Höhe</button>
+            <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('G:-')">G:- — Update abbrechen</button>
+          </div>
+          <div class="cmd-custom" style="margin-top:6px">
+            <input class="cmd-input" id="cmd-elev-input" type="number" placeholder="Höhe (m)" style="max-width:110px">
+            <button class="cmd-btn" onclick="sendElevationCommand()">G:E — Höhe setzen</button>
           </div>
         </div>
 
@@ -2624,6 +2651,19 @@ async function sendCommand(cmd) {
 function sendCommandCustom() {
   const val = (document.getElementById('cmd-input').value || '').trim();
   if (val) sendCommand(val);
+}
+
+function sendElevationCommand() {
+  const raw = parseInt(document.getElementById('cmd-elev-input').value, 10);
+  if (isNaN(raw) || raw < -9999 || raw > 9999) {
+    const r = document.getElementById('cmd-result');
+    r.className = 'cmd-result err';
+    r.textContent = '✗ Höhe muss zwischen -9999 und +9999 m liegen';
+    return;
+  }
+  const sign = raw < 0 ? '-' : '+';
+  const val  = String(Math.abs(raw)).padStart(4, '0');
+  sendCommand(`G:E${sign}${val}`);
 }
 
 const SAMPLE_DATA = `@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
