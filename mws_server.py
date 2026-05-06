@@ -27,9 +27,10 @@ EXPORT_HOURS = 72   # default look-back window for CSV export
 app = Flask(__name__)
 
 # ── In-memory cache ────────────────────────────────────────────────────────────
-_lock   = threading.Lock()
-_token  = {'value': None, 'expires': 0.0}
-_devs   = {'list': None,  'fetched': 0.0}
+_lock    = threading.Lock()
+_token   = {'value': None, 'expires': 0.0}
+_devs    = {'list': None,  'fetched': 0.0}
+_session = requests.Session()   # persists cookies across requests
 
 
 def _load_cfg():
@@ -38,8 +39,8 @@ def _load_cfg():
 
 
 def _do_login(cfg):
-    """POST /user/login → raw token string."""
-    r = requests.post(
+    """POST /user/login → raw token string (session cookies are retained)."""
+    r = _session.post(
         f'{QUANTIMET}/user/login',
         json={'username': cfg['username'], 'password': cfg['password']},
         timeout=15,
@@ -86,7 +87,7 @@ def get_devices() -> list:
     cfg = _load_cfg()
 
     def fetch(token):
-        return requests.get(
+        return _session.get(
             f'{QUANTIMET}/user/units',
             params={'email': cfg['username']},
             headers=_auth_headers(token),
@@ -159,7 +160,7 @@ def api_images():
         start_ms = now_ms - hours * 3_600_000
 
         def fetch(token):
-            return requests.get(
+            return _session.get(
                 f'{QUANTIMET}/unit/entries/timestamps',
                 params={'deviceId': device['id'], 'startTs': start_ms},
                 headers=_auth_headers(token),
@@ -212,7 +213,7 @@ def api_command():
         }
 
         def fetch(token):
-            return requests.post(
+            return _session.post(
                 f'{QUANTIMET}/unit/commands/send',
                 json=payload,
                 headers=_auth_headers(token),
@@ -220,7 +221,9 @@ def api_command():
             )
 
         r = _retry_on_401(fetch)
-        return jsonify({'result': r.text.strip() or 'Command Sent Ok'})
+        print(f'[CMD] payload={payload}')
+        print(f'[CMD] status={r.status_code} body={r.text!r}')
+        return jsonify({'result': r.text.strip() or 'Command Sent Ok', 'status': r.status_code})
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 
@@ -249,7 +252,7 @@ def api_data():
         start_ms = now_ms - hours * 3_600_000
 
         def fetch(token):
-            return requests.post(
+            return _session.post(
                 f'{QUANTIMET}/unit/entries/export',
                 json={'device': device, 'startTime': start_ms, 'endTime': now_ms},
                 headers=_auth_headers(token),
