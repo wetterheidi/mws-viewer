@@ -1128,10 +1128,6 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
       <button class="btn-ghost" onclick="loadSample()">Beispieldaten laden</button>
     </div>
   </details>
-  <details class="paste-details" id="raw-last-details">
-    <summary onclick="showLastRaw()">Letztes Rohpaket anzeigen</summary>
-    <textarea id="raw-last-out" readonly style="height:6em;background:var(--bg2);color:var(--text1);font-size:11px;" placeholder="Noch keine Quantimet-Daten geladen."></textarea>
-  </details>
 </div>
 
 <div id="tab-bar">
@@ -1325,17 +1321,6 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
           </div>
         </div>
 
-        <div class="cmd-group">
-          <div class="cmd-group-label">Kamera</div>
-          <div class="cmd-buttons">
-            <button class="cmd-btn" onclick="sendCommand('I:5')">I:5 — Alle Kameras</button>
-            <button class="cmd-btn" onclick="sendCommand('I:1')">I:1 — Kamera Nord</button>
-            <button class="cmd-btn" onclick="sendCommand('I:2')">I:2 — Kamera Ost</button>
-            <button class="cmd-btn" onclick="sendCommand('I:3')">I:3 — Kamera Süd</button>
-            <button class="cmd-btn" onclick="sendCommand('I:4')">I:4 — Kamera West</button>
-            <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('I:0')">I:0 — Abbrechen</button>
-          </div>
-        </div>
 
         <div class="cmd-group">
           <div class="cmd-group-label">SPECI-Modus</div>
@@ -1980,12 +1965,12 @@ let lastRawText   = '';       // raw text of last Quantimet response (for debug)
 let _dbLatest     = null;     // latest record for dashboard/runway recalc
 
 function showLastRaw() {
-  const el = document.getElementById('raw-last-out');
-  if (!lastRawText) { el.value = 'Noch keine Quantimet-Daten geladen.'; return; }
+  if (!lastRawText) { console.log('[MWS] Noch keine Quantimet-Daten geladen.'); return; }
   const lines = lastRawText.split('\n').map(l => l.trim()).filter(Boolean);
-  // Prefer last packet with a valid timestamp (T: not T:-) to skip GPS-loss packets
   const valid = lines.filter(l => /T:\d{2}\/\d{2}\/\d{2}/.test(l));
-  el.value = (valid.length ? valid[valid.length - 1] : lines[lines.length - 1]) || '(leer)';
+  const packet = (valid.length ? valid[valid.length - 1] : lines[lines.length - 1]) || '(leer)';
+  console.log('[MWS] Letztes Rohpaket:\n' + packet);
+  return packet;
 }
 
 // magnetic declination state
