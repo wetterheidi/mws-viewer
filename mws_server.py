@@ -191,28 +191,29 @@ def api_command():
         cfg    = _load_cfg()
         now_ms = int(time.time() * 1000)
 
-        def make_payload(token):
-            return {
-                'deviceId': device['id'],
-                'options': {
-                    'method': 'MWSCommands',
-                    'params': {
-                        'CmdSendDate':     now_ms,
-                        'Command':         [command],
-                        'DestinationIMEI': [imei],
-                        'DeviceType':      ['MWS'],
-                        'Issuer':          [cfg['username']],
-                        'Modem':           [''],
-                    },
-                    'timeout': 5000,
+        modem  = device.get('modem', '') or ''
+        method = 'MWSCellCommands' if modem == 'Cellular' else 'MWSCommands'
+
+        payload = {
+            'deviceId': device['id'],
+            'options': {
+                'method': method,
+                'params': {
+                    'CmdSendDate':     now_ms,
+                    'Command':         [command],
+                    'DestinationIMEI': [imei],
+                    'DeviceType':      ['MWS'],
+                    'Issuer':          [cfg['username']],
+                    'Modem':           [modem],
                 },
-                'token': token,
-            }
+                'timeout': 5000,
+            },
+        }
 
         def fetch(token):
             return requests.post(
                 f'{QUANTIMET}/unit/commands/send',
-                json=make_payload(token),
+                json=payload,
                 headers=_auth_headers(token),
                 timeout=15,
             )
