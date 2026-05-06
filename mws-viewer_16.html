@@ -914,6 +914,29 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
                 font-family: var(--mono); }
 @media (max-width: 900px) { .cam-imgs { grid-template-columns: repeat(2, 1fr); } }
 
+/* ── COMMAND PANEL ── */
+.cmd-panel       { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 18px; }
+.cmd-panel-title { font-size: 13px; font-weight: 600; color: var(--text2);
+                   letter-spacing: .06em; text-transform: uppercase; margin-bottom: 14px; }
+.cmd-group       { margin-bottom: 14px; }
+.cmd-group-label { font-size: 11px; color: var(--text2); font-family: var(--mono);
+                   margin-bottom: 6px; }
+.cmd-buttons     { display: flex; flex-wrap: wrap; gap: 6px; }
+.cmd-btn         { padding: 5px 12px; font-size: 12px; font-family: var(--mono);
+                   background: var(--bg2); color: var(--text1); border: 1px solid var(--border);
+                   border-radius: 4px; cursor: pointer; }
+.cmd-btn:hover   { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cmd-btn-warn    { border-color: #c0392b; color: #c0392b; }
+.cmd-btn-warn:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+.cmd-custom      { display: flex; gap: 8px; align-items: center; }
+.cmd-input       { flex: 1; max-width: 200px; padding: 5px 8px; font-size: 12px;
+                   font-family: var(--mono); background: var(--bg2); color: var(--text1);
+                   border: 1px solid var(--border); border-radius: 4px; }
+.cmd-result      { margin-top: 10px; font-size: 12px; font-family: var(--mono);
+                   padding: 6px 10px; border-radius: 4px; display: none; }
+.cmd-result.ok   { background: rgba(39,174,96,.15); color: #27ae60; display: block; }
+.cmd-result.err  { background: rgba(192,57,43,.15);  color: #c0392b;  display: block; }
+
 /* ── DATA SOURCE SECTION ── */
 #source-section {
   padding: 12px 24px;
@@ -1280,6 +1303,49 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
           <div class="chart-header"><span class="chart-title">Neigung (Tilt) °</span></div>
           <canvas id="chart-tilt"></canvas>
         </div>
+      </div>
+      <!-- Command Panel (nur Quantimet) -->
+      <div class="cmd-panel" id="cmd-panel" style="display:none">
+        <div class="cmd-panel-title">📡 MWS Kommandos</div>
+
+        <div class="cmd-group">
+          <div class="cmd-group-label">Betriebsmodus</div>
+          <div class="cmd-buttons">
+            <button class="cmd-btn" onclick="sendCommand('M:0')">M:0 — Extended (3 h)</button>
+            <button class="cmd-btn" onclick="sendCommand('M:1')">M:1 — Stündlich</button>
+            <button class="cmd-btn" onclick="sendCommand('M:2')">M:2 — Kontinuierlich (20 min)</button>
+          </div>
+        </div>
+
+        <div class="cmd-group">
+          <div class="cmd-group-label">Kamera</div>
+          <div class="cmd-buttons">
+            <button class="cmd-btn" onclick="sendCommand('I:5')">I:5 — Alle Kameras</button>
+            <button class="cmd-btn" onclick="sendCommand('I:1')">I:1 — Kamera Nord</button>
+            <button class="cmd-btn" onclick="sendCommand('I:2')">I:2 — Kamera Ost</button>
+            <button class="cmd-btn" onclick="sendCommand('I:3')">I:3 — Kamera Süd</button>
+            <button class="cmd-btn" onclick="sendCommand('I:4')">I:4 — Kamera West</button>
+            <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('I:0')">I:0 — Abbrechen</button>
+          </div>
+        </div>
+
+        <div class="cmd-group">
+          <div class="cmd-group-label">SPECI-Modus</div>
+          <div class="cmd-buttons">
+            <button class="cmd-btn" onclick="sendCommand('S:1')">S:1 — SPECI ein</button>
+            <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('S:0')">S:0 — SPECI aus</button>
+          </div>
+        </div>
+
+        <div class="cmd-group">
+          <div class="cmd-group-label">Benutzerdefiniert</div>
+          <div class="cmd-custom">
+            <input class="cmd-input" id="cmd-input" type="text" placeholder="z.B. M:2 I:5">
+            <button class="cmd-btn" onclick="sendCommandCustom()">Senden</button>
+          </div>
+        </div>
+
+        <div class="cmd-result" id="cmd-result"></div>
       </div>
     </div>
   </div>
@@ -2533,6 +2599,33 @@ async function loadCameraImages() {
   }
 }
 
+async function sendCommand(cmd) {
+  if (!activeImei) return;
+  const resultEl = document.getElementById('cmd-result');
+  resultEl.className = 'cmd-result';
+  resultEl.textContent = `Sende ${cmd}…`;
+  resultEl.style.display = 'block';
+  try {
+    const resp = await fetch('/api/command', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({imei: activeImei, command: cmd}),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
+    resultEl.className = 'cmd-result ok';
+    resultEl.textContent = `✓ ${cmd} — ${data.result}`;
+  } catch (e) {
+    resultEl.className = 'cmd-result err';
+    resultEl.textContent = `✗ ${e.message}`;
+  }
+}
+
+function sendCommandCustom() {
+  const val = (document.getElementById('cmd-input').value || '').trim();
+  if (val) sendCommand(val);
+}
+
 const SAMPLE_DATA = `@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:191:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.82:3013  RH:77  WI:1:?:0.3:S  GU:2:57  LD:?:0:--  CL:1ca14:0:0:2317:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:190:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.1  BA:1018.89:3013  RH:77  WI:1:?:0.3:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
@@ -3316,6 +3409,7 @@ function renderStation(data) {
   if(!data.length){ document.getElementById('empty-station').style.display='';document.getElementById('station-content').style.display='none';return;}
   document.getElementById('empty-station').style.display='none';
   document.getElementById('station-content').style.display='';
+  document.getElementById('cmd-panel').style.display = activeSource === 'quantimet' ? '' : 'none';
 
   const first=data[0], last=data[data.length-1];
   const cards=[

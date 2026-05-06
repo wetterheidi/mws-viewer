@@ -172,6 +172,55 @@ def api_images():
         return jsonify({'error': str(exc)}), 500
 
 
+@app.route('/api/command', methods=['POST'])
+def api_command():
+    """Send an MWS command via Quantimet API."""
+    body    = request.get_json(force=True) or {}
+    imei    = body.get('imei', '').strip()
+    command = body.get('command', '').strip()
+
+    if not imei or not command:
+        return jsonify({'error': 'imei and command required'}), 400
+
+    try:
+        devices = get_devices()
+        device  = next((d for d in devices if d['imei'] == imei), None)
+        if device is None:
+            return jsonify({'error': f'Device {imei} not found'}), 404
+
+        cfg    = _load_cfg()
+        now_ms = int(time.time() * 1000)
+
+        payload = {
+            'deviceId': device['id'],
+            'options': {
+                'method': 'MWSCommands',
+                'params': {
+                    'CmdSendDate':     now_ms,
+                    'Command':         [command],
+                    'DestinationIMEI': [imei],
+                    'DeviceType':      ['MWS'],
+                    'Issuer':          [cfg['username']],
+                    'Modem':           [''],
+                },
+                'timeout': 5000,
+            },
+        }
+
+        def fetch(token):
+            return requests.post(
+                f'{QUANTIMET}/unit/commands/send',
+                json=payload,
+                headers=_auth_headers(token),
+                timeout=15,
+            )
+
+        r = _retry_on_401(fetch)
+        return jsonify({'result': r.text.strip() or 'Command Sent Ok'})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
 @app.route('/api/data')
 def api_data():
     """
