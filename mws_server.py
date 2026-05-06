@@ -191,26 +191,28 @@ def api_command():
         cfg    = _load_cfg()
         now_ms = int(time.time() * 1000)
 
-        payload = {
-            'deviceId': device['id'],
-            'options': {
-                'method': 'MWSCommands',
-                'params': {
-                    'CmdSendDate':     now_ms,
-                    'Command':         [command],
-                    'DestinationIMEI': [imei],
-                    'DeviceType':      ['MWS'],
-                    'Issuer':          [cfg['username']],
-                    'Modem':           [''],
+        def make_payload(token):
+            return {
+                'deviceId': device['id'],
+                'options': {
+                    'method': 'MWSCommands',
+                    'params': {
+                        'CmdSendDate':     now_ms,
+                        'Command':         [command],
+                        'DestinationIMEI': [imei],
+                        'DeviceType':      ['MWS'],
+                        'Issuer':          [cfg['username']],
+                        'Modem':           [''],
+                    },
+                    'timeout': 5000,
                 },
-                'timeout': 5000,
-            },
-        }
+                'token': token,
+            }
 
         def fetch(token):
             return requests.post(
                 f'{QUANTIMET}/unit/commands/send',
-                json=payload,
+                json=make_payload(token),
                 headers=_auth_headers(token),
                 timeout=15,
             )

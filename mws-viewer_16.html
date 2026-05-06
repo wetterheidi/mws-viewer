@@ -936,6 +936,13 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
                    padding: 6px 10px; border-radius: 4px; display: none; }
 .cmd-result.ok   { background: rgba(39,174,96,.15); color: #27ae60; display: block; }
 .cmd-result.err  { background: rgba(192,57,43,.15);  color: #c0392b;  display: block; }
+.cmd-history     { margin-top: 18px; }
+.cmd-history-row { display: grid; grid-template-columns: 130px 90px 1fr;
+                   font-size: 11px; font-family: var(--mono); padding: 3px 0;
+                   border-bottom: 1px solid var(--border); gap: 8px; }
+.cmd-history-row.hdr { color: var(--text2); font-weight: 600; }
+.cmd-history-ok  { color: #27ae60; }
+.cmd-history-err { color: #c0392b; }
 
 /* ── DATA SOURCE SECTION ── */
 #source-section {
@@ -1373,6 +1380,14 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         </div>
 
         <div class="cmd-result" id="cmd-result"></div>
+
+        <div class="cmd-history" id="cmd-history" style="display:none">
+          <div class="cmd-group-label" style="margin-bottom:6px">Gesendete Kommandos (diese Sitzung)</div>
+          <div class="cmd-history-row hdr">
+            <span>Zeit (UTC)</span><span>Kommando</span><span>Status</span>
+          </div>
+          <div id="cmd-history-rows"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -2628,10 +2643,11 @@ async function loadCameraImages() {
 
 async function sendCommand(cmd) {
   if (!activeImei) return;
-  const resultEl = document.getElementById('cmd-result');
+  const resultEl  = document.getElementById('cmd-result');
   resultEl.className = 'cmd-result';
   resultEl.textContent = `Sende ${cmd}…`;
   resultEl.style.display = 'block';
+  let ok = false, statusText = '';
   try {
     const resp = await fetch('/api/command', {
       method: 'POST',
@@ -2640,12 +2656,25 @@ async function sendCommand(cmd) {
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
+    ok = true;
+    statusText = data.result;
     resultEl.className = 'cmd-result ok';
-    resultEl.textContent = `✓ ${cmd} — ${data.result}`;
+    resultEl.textContent = `✓ ${cmd} — ${statusText}`;
   } catch (e) {
+    statusText = e.message;
     resultEl.className = 'cmd-result err';
     resultEl.textContent = `✗ ${e.message}`;
   }
+  // History
+  const now = new Date();
+  const ts  = now.toISOString().replace('T',' ').slice(0,16);
+  const row = document.createElement('div');
+  row.className = 'cmd-history-row';
+  row.innerHTML = `<span>${ts}</span><span>${cmd}</span>`
+    + `<span class="${ok ? 'cmd-history-ok' : 'cmd-history-err'}">${ok ? '✓ ' : '✗ '}${statusText}</span>`;
+  const rows = document.getElementById('cmd-history-rows');
+  rows.prepend(row);
+  document.getElementById('cmd-history').style.display = '';
 }
 
 function sendCommandCustom() {
