@@ -46,6 +46,7 @@ def _do_login(cfg):
         timeout=15,
     )
     r.raise_for_status()
+    print(f'[LOGIN] cookies after login: {dict(_session.cookies)}')
     return r.json()['token']
 
 
