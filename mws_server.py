@@ -65,6 +65,14 @@ def _auth_headers(token: str) -> dict:
     return {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
 
 
+def _portal_headers(token: str) -> dict:
+    return {
+        **_auth_headers(token),
+        'Origin':  'https://portal.quantimet.com',
+        'Referer': 'https://portal.quantimet.com/',
+    }
+
+
 def _retry_on_401(fn):
     """Call fn(token). On 401, force re-login and retry once."""
     token = get_token()
@@ -216,7 +224,7 @@ def api_command():
             return _session.post(
                 f'{QUANTIMET}/unit/commands/send',
                 json=payload,
-                headers=_auth_headers(token),
+                headers=_portal_headers(token),
                 timeout=15,
             )
 
