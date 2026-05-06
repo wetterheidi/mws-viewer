@@ -296,6 +296,8 @@ tbody td.bad { color: var(--accent3); }
   grid-template-columns: 210px 1fr 210px;
   gap: 14px;
   align-items: stretch;
+  max-width: 820px;
+  margin: 0 auto;
 }
 .db-side-col { display: flex; flex-direction: column; gap: 10px; }
 .db-side-block {
@@ -1154,7 +1156,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         <div class="db-side-col">
           <div class="db-side-block">
             <div class="db-block-title">Wind</div>
-            <div class="db-big-val"><span id="db-wdir-mag">—</span><span class="db-unit">° mag</span></div>
+            <div class="db-big-val"><span id="db-wdir-mag">—</span><span class="db-unit">mag</span></div>
             <div class="db-row">
               <span class="db-label">Geschw.</span>
               <span class="db-val-md" id="db-wspd-card">—</span>
@@ -3205,7 +3207,7 @@ function updateRwyComponents() {
     const sym  = isHW ? '▲' : '▼';
     const lbl  = isHW ? 'HW' : 'TW';
     const wv   = Math.abs(wind.hw).toFixed(0);
-    const gPart = gust ? ` / G ${Math.abs(gust.hw).toFixed(0)}` : '';
+    const gPart = gust ? ` G ${Math.abs(gust.hw).toFixed(0)}` : '';
     setH('db-hw-line', `<span class="${cls}">${sym} ${lbl} ${wv}${gPart} kn</span>`);
   } else {
     setH('db-hw-line', '—');
@@ -3216,7 +3218,7 @@ function updateRwyComponents() {
     const sym  = wind.cw >= 0 ? '→' : '←';
     const side = wind.cw >= 0 ? 'R' : 'L';
     const wv   = Math.abs(wind.cw).toFixed(0);
-    const gPart = gust ? ` / G ${Math.abs(gust.cw).toFixed(0)}` : '';
+    const gPart = gust ? ` G ${Math.abs(gust.cw).toFixed(0)}` : '';
     setH('db-cw-line', `<span class="db-cw-val">${sym} CW ${wv}${gPart} kn ${side}</span>`);
   } else {
     setH('db-cw-line', '—');
