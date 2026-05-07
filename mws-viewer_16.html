@@ -1733,7 +1733,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
           <thead><tr><th>Parameter</th><th>Tag/Feld</th><th>Bedeutung im Algorithmus</th></tr></thead>
           <tbody>
             <tr><td><code>VI</code></td><td>VI-Tag (mi)</td><td>Primäres Sichtweiten-Kriterium für FG/BR/HZ</td></tr>
-            <tr><td><code>accumPct</code></td><td>PW-Feld 5 (0–99)</td><td>Optischer Moisture-Sensor (Kondensation auf Linse). <em>Nicht</em> identisch mit rel. Feuchte (RH). Differenziert BR von HZ zuverlässig, da RH bei dieser Station bei allen Phänomenen 73–77 % beträgt.</td></tr>
+            <tr><td><code>accumPct</code></td><td>PW-Feld 5 (0–99)</td><td>Optischer Moisture-Sensor (Kondensation auf Linse). <em>Nicht</em> identisch mit rel. Feuchte (RH). Differenziert BR von HZ zuverlässig, da RH bei dieser Station bei allen Phänomenen 73–77 % beträgt.<br><small>Richtwerte: ≈ 30 = trocken · 60–72 = feucht (BR-Bereich) · ≈ 90 = gesättigt (FG/starker BR). Schwellwert: &lt; 60 → HZ · ≥ 60 → BR.</small></td></tr>
             <tr><td><code>RH</code></td><td>RH-Tag (%)</td><td>Sekundärer Feucht-Diskriminator: RH ≥ 80 % → BR (WMO), RH &lt; 80 % → HZ</td></tr>
             <tr><td><code>precipInH</code></td><td>PW-Feld 1 (in/h)</td><td>Primärer Niederschlagsindikator (Tropfenzähler)</td></tr>
             <tr><td><code>disdr</code></td><td>PW-Feld 2 (0–999)</td><td>Disdrometer-Peakwert. Werte ≤ 300 gelten als Sensorrauschen und werden ignoriert.</td></tr>
@@ -3276,12 +3276,12 @@ function renderDashboard(data) {
   ].filter(Boolean).join('  ·  '));
 
   // ── Wind ──────────────────────────────────
-  set('db-wdir-mag',    r.windDir  != null ? round10(((r.windDir % 360) + 360) % 360) + '°' : '—');
+  set('db-wdir-mag',    r.windDir  != null ? round10(((r.windDir % 360) + 360) % 360) + '°' : 'VRB');
   const wspdStr = r.windKt != null ? r.windKt.toFixed(0) + ' kn' : '—';
   set('db-wspd',      wspdStr);
   set('db-wspd-card', wspdStr);
   set('db-gust',        r.gustKt   != null ? r.gustKt.toFixed(0) + ' kn' : '—');
-  set('db-wdir-true',   r.windDir  != null ? wrapDir(r.windDir) + '°' : '—');
+  set('db-wdir-true',   r.windDir  != null ? wrapDir(r.windDir) + '°' : 'VRB');
 
   // ── Temperatur ────────────────────────────
   set('db-temp', r.tempC != null ? r.tempC.toFixed(1) + ' °C' : '—');
