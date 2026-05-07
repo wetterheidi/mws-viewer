@@ -357,7 +357,12 @@ def api_serial_connect():
             return jsonify({'error': 'already connected'}), 409
 
     try:
-        port_obj = serial.Serial(port, baud, timeout=1)
+        # Open first, set baud after — workaround for FTDI errno 22 on macOS
+        port_obj = serial.Serial()
+        port_obj.port    = port
+        port_obj.timeout = 1
+        port_obj.open()
+        port_obj.baudrate = baud
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 
