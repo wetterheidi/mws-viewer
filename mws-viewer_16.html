@@ -1617,16 +1617,16 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         <p>Rohdatenpakete im Textfeld oben einfügen (Zeilenweise oder semikolongetrennt) und <em>Laden &amp; Analysieren</em> klicken. Die Anwendung verarbeitet beliebig viele Pakete gleichzeitig und sortiert sie chronologisch.</p>
         <h3 class="doc-h3">Datenquellen</h3>
         <table class="doc-table">
-          <thead><tr><th>Quelle</th><th>Beschreibung</th><th>Internet nötig</th></tr></thead>
+          <thead><tr><th>Quelle</th><th>Beschreibung</th><th>Server nötig</th><th>Internet nötig</th></tr></thead>
           <tbody>
-            <tr><td>CSV-Datei öffnen</td><td>Exportierte Monatsdatei (Quantimet-Format) per Dateidialog laden</td><td>Nein</td></tr>
-            <tr><td>Datei-Polling</td><td>MWS per USB angeschlossen; Datei wird automatisch alle 5 Min neu eingelesen</td><td>Nein</td></tr>
-            <tr><td>Quantimet Live</td><td>Direktabfrage der Quantimet-API; erfordert laufenden MWS-Server</td><td>Ja</td></tr>
-            <tr><td>Rohdaten einfügen</td><td>@0deN-Pakete direkt ins Textfeld einfügen und parsen</td><td>Nein</td></tr>
+            <tr><td>CSV-Datei</td><td>Exportierte Monatsdatei (Quantimet-Format) per Dateidialog laden; Auto-Polling alle 5 Min</td><td>Nein</td><td>Nein</td></tr>
+            <tr><td>Quantimet Live</td><td>Direktabfrage der Quantimet-API; zeigt die letzten 72 h; Auto-Polling alle 5 Min</td><td>Ja</td><td>Ja</td></tr>
+            <tr><td>Seriell (RS-232/USB)</td><td>MWS per Datenkabel direkt angeschlossen; Echtzeitempfang mit 30-Sek-Poll; Daten werden in <code>serial_log.txt</code> gespeichert</td><td>Ja</td><td>Nein</td></tr>
+            <tr><td>Rohdaten einfügen</td><td>@0deN-Pakete direkt ins Textfeld einfügen und parsen</td><td>Nein</td><td>Nein</td></tr>
           </tbody>
         </table>
         <h3 class="doc-h3">Offline-Betrieb</h3>
-        <p>Die HTML-Datei ist vollständig in sich geschlossen (Chart.js eingebettet, System-Schriftarten als Fallback). Datenquellen CSV, Datei-Polling und Rohdaten funktionieren ohne Internetverbindung. Quantimet-Zugriff erfordert den MWS-Server; beim Öffnen der Datei direkt im Browser (<code>file://</code>) erscheint stattdessen ein Link zur Web-Version.</p>
+        <p>Die HTML-Datei ist vollständig in sich geschlossen (Chart.js eingebettet, System-Schriftarten als Fallback). CSV und Rohdaten funktionieren ohne Server und ohne Internetverbindung. Quantimet und Seriell erfordern den laufenden MWS-Server (<code>start_mws_viewer.command</code>); beim Öffnen der Datei direkt im Browser (<code>file://</code>) sind diese Quellen ausgeblendet und ein Link zur Web-Version wird angezeigt.</p>
         <h3 class="doc-h3">Tabs</h3>
         <table class="doc-table">
           <thead><tr><th>Tab</th><th>Inhalt</th></tr></thead>

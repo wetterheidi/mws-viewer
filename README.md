@@ -22,6 +22,17 @@ Browser-basierter Viewer für Daten der **MWS** (Modular Weather Station) — un
 - Gerät auswählen → **"🌐 Laden"** → zeigt die letzten 72 Stunden
 - Auto-Polling alle 5 Minuten (holt jeweils die letzten 72h neu)
 
+### Seriell (RS-232/USB-Direktanschluss)
+- MWS per Datenkabel (USB–RS-232, FTDI-Chip) am Rechner anschließen
+- **"↻ Ports"** → erkennt verfügbare COM-/Seriellports automatisch
+- Port auswählen → **"▶ Verbinden"** → Echtzeitempfang mit 30-Sekunden-Poll
+- Alle empfangenen Pakete werden in `serial_log.txt` persistent gespeichert und beim nächsten Serverstart automatisch vorgeladen
+- Erfordert laufenden MWS-Server (nicht verfügbar im `file://`-Modus)
+- **Windows:** FTDI-Treiber (CDM-Treiber von ftdichip.com) muss vorab installiert sein
+
+### Rohdaten manuell einfügen
+- `@0deN`-Pakete direkt ins Textfeld einfügen und **"▶ Laden & Analysieren"** klicken
+
 ---
 
 ## Lokale Einrichtung (macOS, Erstinstallation)
@@ -80,10 +91,11 @@ journalctl -u mws-viewer -f     # Live-Log
 | Datei | Zweck |
 |---|---|
 | `mws-viewer_16.html` | Viewer (HTML/JS, alle Logik im Browser) |
-| `mws_server.py` | Flask-Proxy: Quantimet-Auth, Geräteliste, Datenexport |
+| `mws_server.py` | Flask-Proxy: Quantimet-Auth, Geräteliste, Datenexport, Seriell-Bridge |
 | `mws_config.json` | Quantimet-Zugangsdaten (**nicht im Repo**, gitignored) |
 | `mws_config.json.template` | Vorlage für mws_config.json |
-| `requirements.txt` | Python-Abhängigkeiten (flask, requests) |
+| `requirements.txt` | Python-Abhängigkeiten (flask, requests, pyserial) |
+| `serial_log.txt` | Persistentes Seriell-Log (**nicht im Repo**, gitignored) |
 | `start_mws_viewer.command` | macOS-Starter (Doppelklick im Finder) |
 | `deploy/nginx-mws-viewer.conf` | nginx-Config (Port 80, SSL via certbot) |
 | `deploy/mws-viewer.service` | systemd-Unit |

@@ -156,6 +156,68 @@ def _load_serial_log():
 _load_serial_log()
 
 
+def _open_serial_port(port: str, baud: int, timeout: float = 1):
+    """
+    Open a serial port and return a readline()-capable object.
+    Uses raw POSIX calls (os/termios) on macOS/Linux to work around
+    pyserial 3.5 + Python 3.13 tcsetattr incompatibility (errno 22).
+    Falls back to pyserial on Windows.
+    """
+    if os.name == 'nt':
+        return serial.Serial(port, baud, timeout=timeout)
+
+    import fcntl
+    import select as _select
+    import termios as _termios
+
+    _BAUDS = {
+        1200:   _termios.B1200,   2400:  _termios.B2400,
+        4800:   _termios.B4800,   9600:  _termios.B9600,
+        19200:  _termios.B19200,  38400: _termios.B38400,
+        57600:  _termios.B57600,  115200: _termios.B115200,
+    }
+
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        fcntl.fcntl(fd, fcntl.F_SETFL, 0)          # switch to blocking I/O
+        attrs      = list(_termios.tcgetattr(fd))    # get current settings
+        baud_const = _BAUDS.get(baud, _termios.B9600)
+        attrs[0] = _termios.IGNBRK | _termios.IGNPAR  # iflag
+        attrs[1] = 0                                    # oflag
+        attrs[2] = _termios.CS8 | _termios.CREAD | _termios.CLOCAL  # cflag
+        attrs[3] = 0                                    # lflag
+        attrs[4] = baud_const                           # ispeed
+        attrs[5] = baud_const                           # ospeed
+        # attrs[6] = cc — keep whatever tcgetattr returned (avoids EINVAL)
+        _termios.tcsetattr(fd, _termios.TCSAFLUSH, attrs)
+    except Exception:
+        os.close(fd)
+        raise
+
+    class _Port:
+        """Minimal serial-like object backed by a raw fd."""
+        def readline(self_inner):
+            buf = b''
+            while True:
+                r, _, _ = _select.select([fd], [], [], timeout)
+                if not r:
+                    return buf          # timeout → return what we have
+                ch = os.read(fd, 1)
+                if not ch:
+                    return buf
+                buf += ch
+                if ch == b'\n':
+                    return buf
+
+        def close(self_inner):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    return _Port()
+
+
 def _finalize_serial_packet(lines):
     packet = '  '.join(lines).strip()
     if not packet.endswith(';'):
@@ -357,12 +419,7 @@ def api_serial_connect():
             return jsonify({'error': 'already connected'}), 409
 
     try:
-        # Open first, set baud after — workaround for FTDI errno 22 on macOS
-        port_obj = serial.Serial()
-        port_obj.port    = port
-        port_obj.timeout = 1
-        port_obj.open()
-        port_obj.baudrate = baud
+        port_obj = _open_serial_port(port, baud, timeout=1)
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 

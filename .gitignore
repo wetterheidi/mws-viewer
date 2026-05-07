@@ -1,6 +1,9 @@
 # Credentials — niemals einchecken
 mws_config.json
 
+# Seriell-Log — stationsspezifische Rohdaten, nicht im Repo
+serial_log.txt
+
 # Python
 venv/
 .venv/
