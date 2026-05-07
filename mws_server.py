@@ -6,6 +6,7 @@ MWS Viewer Server
 - Caches auth token (1h) and device list (5min)
 """
 
+import collections
 import datetime
 import json
 import os
@@ -18,11 +19,20 @@ import ppigrf
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 
+try:
+    import serial
+    import serial.tools.list_ports
+    HAS_SERIAL = True
+except ImportError:
+    HAS_SERIAL = False
+
 # ── Config ────────────────────────────────────────────────────────────────────
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE  = os.path.join(BASE_DIR, 'mws_config.json')
 QUANTIMET    = 'https://portal.quantimet.com:3001'
 EXPORT_HOURS = 72   # default look-back window for CSV export
+SERIAL_LOG   = os.path.join(BASE_DIR, 'serial_log.txt')
+SERIAL_BAUD  = 9600
 
 app = Flask(__name__)
 
@@ -112,6 +122,92 @@ def get_devices() -> list:
         _devs['fetched'] = time.time()
 
     return devices
+
+
+# ── Serial port state ─────────────────────────────────────────────────────────
+_ser_lock = threading.Lock()
+_ser = {
+    'port':    None,
+    'thread':  None,
+    'stop':    None,
+    'buf':     collections.deque(maxlen=2000),
+    'log':     None,
+    'status':  'disconnected',
+    'error':   '',
+    'count':   0,
+}
+
+
+def _load_serial_log():
+    """Pre-fill buffer from existing log file on server start."""
+    if not os.path.exists(SERIAL_LOG):
+        return
+    try:
+        with open(SERIAL_LOG, encoding='utf-8', errors='replace') as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    _ser['buf'].append(line)
+        _ser['count'] = len(_ser['buf'])
+    except Exception:
+        pass
+
+
+_load_serial_log()
+
+
+def _finalize_serial_packet(lines):
+    packet = '  '.join(lines).strip()
+    if not packet.endswith(';'):
+        packet += '  ;'
+    with _ser_lock:
+        _ser['buf'].append(packet)
+        _ser['count'] += 1
+        log = _ser['log']
+    if log:
+        try:
+            log.write(packet + '\n')
+            log.flush()
+        except Exception:
+            pass
+
+
+def _serial_reader():
+    port_obj = _ser['port']
+    stop_evt = _ser['stop']
+    current  = []
+
+    with _ser_lock:
+        _ser['status'] = 'connected'
+
+    try:
+        while not stop_evt.is_set():
+            try:
+                raw = port_obj.readline()
+            except Exception as exc:
+                with _ser_lock:
+                    _ser['status'] = 'error'
+                    _ser['error']  = str(exc)
+                break
+            line = raw.decode('ascii', errors='replace').strip()
+            if not line:
+                continue
+            if line.startswith('@I:'):
+                if current:
+                    _finalize_serial_packet(current)
+                current = []
+            elif line.startswith('@0'):
+                if current:
+                    _finalize_serial_packet(current)
+                current = [line]
+            elif current:
+                current.append(line)
+    finally:
+        if current:
+            _finalize_serial_packet(current)
+        with _ser_lock:
+            if _ser['status'] == 'connected':
+                _ser['status'] = 'disconnected'
 
 
 # ── API routes ─────────────────────────────────────────────────────────────────
@@ -235,6 +331,115 @@ def api_command():
         return jsonify({'result': r.text.strip() or 'Command Sent Ok', 'status': r.status_code})
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/api/serial/ports')
+def api_serial_ports():
+    if not HAS_SERIAL:
+        return jsonify({'error': 'pyserial not installed'}), 503
+    ports = [{'device': p.device, 'description': p.description}
+             for p in serial.tools.list_ports.comports()]
+    return jsonify({'ports': ports})
+
+
+@app.route('/api/serial/connect', methods=['POST'])
+def api_serial_connect():
+    if not HAS_SERIAL:
+        return jsonify({'error': 'pyserial not installed'}), 503
+    body = request.get_json(force=True) or {}
+    port = body.get('port', '').strip()
+    baud = int(body.get('baud', SERIAL_BAUD))
+    if not port:
+        return jsonify({'error': 'port required'}), 400
+
+    with _ser_lock:
+        if _ser['status'] == 'connected':
+            return jsonify({'error': 'already connected'}), 409
+
+    try:
+        port_obj = serial.Serial(port, baud, timeout=1)
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+    stop_evt = threading.Event()
+    log_fh   = open(SERIAL_LOG, 'a', encoding='utf-8')
+
+    with _ser_lock:
+        _ser['port']   = port_obj
+        _ser['stop']   = stop_evt
+        _ser['log']    = log_fh
+        _ser['error']  = ''
+        _ser['status'] = 'connecting'
+
+    t = threading.Thread(target=_serial_reader, daemon=True)
+    with _ser_lock:
+        _ser['thread'] = t
+    t.start()
+
+    return jsonify({'ok': True, 'port': port, 'baud': baud})
+
+
+@app.route('/api/serial/disconnect', methods=['POST'])
+def api_serial_disconnect():
+    with _ser_lock:
+        stop = _ser['stop']
+        port_obj = _ser['port']
+        log_fh   = _ser['log']
+
+    if stop:
+        stop.set()
+    if port_obj:
+        try:
+            port_obj.close()
+        except Exception:
+            pass
+    if log_fh:
+        try:
+            log_fh.close()
+        except Exception:
+            pass
+
+    with _ser_lock:
+        _ser['port']   = None
+        _ser['stop']   = None
+        _ser['log']    = None
+        _ser['thread'] = None
+        _ser['status'] = 'disconnected'
+
+    return jsonify({'ok': True})
+
+
+@app.route('/api/serial/status')
+def api_serial_status():
+    with _ser_lock:
+        return jsonify({
+            'status': _ser['status'],
+            'error':  _ser['error'],
+            'count':  _ser['count'],
+            'available': HAS_SERIAL,
+        })
+
+
+@app.route('/api/serial/data')
+def api_serial_data():
+    since = int(request.args.get('since', 0))
+    with _ser_lock:
+        buf   = list(_ser['buf'])
+        total = _ser['count']
+
+    buf_start = total - len(buf)   # global index of buf[0]
+    if since <= buf_start:
+        packets = buf
+    elif since >= total:
+        packets = []
+    else:
+        packets = buf[since - buf_start:]
+
+    return Response(
+        '\n'.join(packets),
+        mimetype='text/plain; charset=utf-8',
+        headers={'X-Total-Count': str(total)},
+    )
 
 
 @app.route('/api/data')

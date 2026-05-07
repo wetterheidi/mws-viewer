@@ -1017,6 +1017,29 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 .paste-details summary:hover { color: var(--text2); }
 .paste-details[open] summary { color: var(--text2); margin-bottom: 6px; }
 
+/* ── SERIAL ROW ── */
+.ser-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text3);
+  flex-shrink: 0;
+  transition: background .3s;
+}
+.ser-dot.connected   { background: #27ae60; }
+.ser-dot.connecting  { background: #f39c12; }
+.ser-dot.error       { background: #c0392b; }
+#ser-port {
+  min-width: 160px;
+  max-width: 260px;
+  background: var(--bg3);
+  color: var(--text1);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
 /* ── TIME FILTER BAR ── */
 #time-filter-bar {
   background: var(--bg2);
@@ -1114,6 +1137,14 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
     <button class="btn-ghost btn-sm" onclick="loadQuantimetDevices()" title="Geräteliste aktualisieren">↻ Geräteliste</button>
     <button class="btn-primary btn-sm" onclick="loadFromQuantimet()">🌐 Laden</button>
     <span id="qtm-status" style="font-family:var(--mono);font-size:11px;color:var(--text3);"></span>
+  </div>
+  <div class="source-row" id="ser-row">
+    <span class="source-label">Seriell</span>
+    <select id="ser-port"><option value="">— Port wählen —</option></select>
+    <button class="btn-ghost btn-sm" onclick="loadSerialPorts()" title="COM-Ports aktualisieren">↻ Ports</button>
+    <button class="btn-primary btn-sm" id="ser-connect-btn" onclick="toggleSerial()">▶ Verbinden</button>
+    <div class="ser-dot" id="ser-dot"></div>
+    <span id="ser-status" style="font-family:var(--mono);font-size:11px;color:var(--text3);"></span>
   </div>
   <div class="avail-bar">
     <div class="status-dot" id="status-dot"></div>
@@ -1959,8 +1990,11 @@ let pollCountdownTimer = null;
 let pollSecondsLeft = 0;
 const POLL_MS  = 5 * 60 * 1000;   // 5 minutes
 let timeFilter = { mode: 'all', hours: 0, from: null, to: null };
-let activeSource  = 'file';   // 'file' | 'quantimet'
+let activeSource  = 'file';   // 'file' | 'quantimet' | 'serial'
 let activeImei    = null;
+let _serOffset    = 0;        // total serial packets processed so far
+let _serConnected = false;
+const SERIAL_POLL_MS = 30_000;
 let lastRawText   = '';       // raw text of last Quantimet response (for debug)
 let _dbLatest     = null;     // latest record for dashboard/runway recalc
 
@@ -2448,7 +2482,8 @@ function processText(text, fresh) {
 // ─────────────────────────────────────────────
 function startPolling() {
   stopPolling();
-  pollSecondsLeft = POLL_MS / 1000;
+  const interval = activeSource === 'serial' ? SERIAL_POLL_MS : POLL_MS;
+  pollSecondsLeft = interval / 1000;
   updatePollDisplay();
 
   pollCountdownTimer = setInterval(() => {
@@ -2460,11 +2495,13 @@ function startPolling() {
     clearInterval(pollCountdownTimer);
     if (activeSource === 'quantimet') {
       await loadFromQuantimet(false);
+    } else if (activeSource === 'serial') {
+      await loadFromSerial(false);
     } else {
       await loadFromHandle(false);
     }
     startPolling();  // restart cycle
-  }, POLL_MS);
+  }, interval);
 }
 
 function stopPolling() {
@@ -2478,6 +2515,135 @@ function updatePollDisplay() {
   const sec = pollSecondsLeft % 60;
   document.getElementById('poll-status').textContent =
     `● Polling aktiv — nächste Aktualisierung: ${min}:${sec.toString().padStart(2,'0')}`;
+}
+
+// ─────────────────────────────────────────────
+//  SERIAL PORT
+// ─────────────────────────────────────────────
+async function loadSerialPorts() {
+  const sel = document.getElementById('ser-port');
+  const statusEl = document.getElementById('ser-status');
+  statusEl.textContent = 'Suche Ports…';
+  try {
+    const resp = await fetch('/api/serial/ports');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— Port wählen —</option>';
+    data.ports.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.device;
+      opt.textContent = `${p.device} — ${p.description}`;
+      sel.appendChild(opt);
+    });
+    if (prev) sel.value = prev;
+    statusEl.textContent = data.ports.length ? '' : 'Keine Ports gefunden';
+  } catch (e) {
+    statusEl.textContent = `Fehler: ${e.message}`;
+  }
+}
+
+async function toggleSerial() {
+  if (_serConnected) {
+    await disconnectSerial();
+  } else {
+    await connectSerial();
+  }
+}
+
+async function connectSerial() {
+  const port = document.getElementById('ser-port').value;
+  const statusEl = document.getElementById('ser-status');
+  if (!port) { statusEl.textContent = 'Bitte Port wählen.'; return; }
+  statusEl.textContent = 'Verbinde…';
+  _setSerDot('connecting');
+  try {
+    const resp = await fetch('/api/serial/connect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({port}),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    _serConnected = true;
+    document.getElementById('ser-connect-btn').textContent = '■ Trennen';
+    _setSerDot('connecting');
+    statusEl.textContent = `${port} verbunden`;
+    activeSource = 'serial';
+    document.getElementById('current-file').textContent = `Seriell: ${port}`;
+    document.getElementById('cmd-panel').style.display = 'none';
+    _serOffset = 0;
+    allData = []; parsedData = [];
+    await loadFromSerial(true);
+  } catch (e) {
+    statusEl.textContent = `Fehler: ${e.message}`;
+    _setSerDot('error');
+  }
+}
+
+async function disconnectSerial() {
+  try {
+    await fetch('/api/serial/disconnect', {method: 'POST'});
+  } catch (_) {}
+  _serConnected = false;
+  _serOffset = 0;
+  document.getElementById('ser-connect-btn').textContent = '▶ Verbinden';
+  _setSerDot('');
+  document.getElementById('ser-status').textContent = 'Getrennt';
+  if (activeSource === 'serial') {
+    stopPolling();
+    activeSource = 'file';
+    document.getElementById('current-file').textContent = 'Keine Datei geladen';
+    document.getElementById('avail-text').textContent = 'Keine Daten geladen — CSV öffnen oder Rohdaten einfügen';
+  }
+}
+
+function _setSerDot(state) {
+  const dot = document.getElementById('ser-dot');
+  if (dot) dot.className = 'ser-dot' + (state ? ' ' + state : '');
+}
+
+async function _pollSerStatus() {
+  try {
+    const resp = await fetch('/api/serial/status');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const dot = data.status === 'connected' ? 'connected'
+               : data.status === 'connecting' ? 'connecting'
+               : data.status === 'error' ? 'error' : '';
+    _setSerDot(dot);
+    if (data.status === 'error' && _serConnected) {
+      document.getElementById('ser-status').textContent = `Fehler: ${data.error}`;
+      _serConnected = false;
+      document.getElementById('ser-connect-btn').textContent = '▶ Verbinden';
+    }
+  } catch (_) {}
+}
+
+async function loadFromSerial(fresh = true) {
+  if (!_serConnected) return;
+  await _pollSerStatus();
+  const statusEl = document.getElementById('ser-status');
+  try {
+    const resp = await fetch(`/api/serial/data?since=${_serOffset}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const total = parseInt(resp.headers.get('X-Total-Count') || '0', 10);
+    const text  = await resp.text();
+    _serOffset  = total;
+    if (!text.trim()) {
+      if (fresh) {
+        document.getElementById('avail-text').textContent = 'Seriell verbunden — warte auf Datenpakete…';
+        document.getElementById('status-dot').className = 'status-dot';
+        startPolling();
+      }
+      return;
+    }
+    activeSource = 'serial';
+    processText(text, fresh);
+    if (fresh) startPolling();
+  } catch (e) {
+    statusEl.textContent = `Fehler: ${e.message}`;
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -4038,9 +4204,11 @@ function clearAll() {
   fileHandle   = null;
   activeSource = 'file';
   activeImei   = null;
+  _serOffset   = 0;
   allData    = [];
   parsedData = [];
   document.getElementById('qtm-status').textContent = '';
+  document.getElementById('ser-status').textContent = '';
   document.getElementById('raw-input').value    = '';
   document.getElementById('current-file').textContent = 'Keine Datei geladen';
   document.getElementById('reload-btn').style.display = 'none';
@@ -4118,6 +4286,11 @@ window.addEventListener('DOMContentLoaded', ()=>{
         'style="color:var(--accent);text-decoration:none">Web-Version öffnen ↗</a>' +
         '</span>';
     }
+    const serRow = document.getElementById('ser-row');
+    if (serRow) serRow.style.display = 'none';
+  } else {
+    // Proactively load available ports
+    loadSerialPorts();
   }
   const big=`@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:191:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.82:3013  RH:77  WI:1:?:0.3:S  GU:2:57  LD:?:0:--  CL:1ca14:0:0:2317:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
