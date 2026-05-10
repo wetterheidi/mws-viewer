@@ -2458,17 +2458,27 @@ function onFileInput(event) {
 }
 
 function processText(text, fresh) {
-  const raw      = detectAndParseCSV(text);
-  const newData  = validateAll(raw);        // korrupte Datensätze rausfiltern
-  const appendEl = document.getElementById('tf-append');
+  const raw   = detectAndParseCSV(text);
+  const valid = validateAll(raw);
+
+  // Deduplizierung: Quantimet liefert denselben Datensatz pro Iridium-Übertragung
+  // mehrfach — gleiche UTC-Sekunde wird nur einmal behalten.
+  const seenTs  = new Set();
+  const newData = valid.filter(d => {
+    const t = d.datetime.getTime();
+    if (seenTs.has(t)) return false;
+    seenTs.add(t);
+    return true;
+  });
+
+  const appendEl     = document.getElementById('tf-append');
   const shouldAppend = appendEl && appendEl.checked && !fresh;
 
   if (fresh || !shouldAppend || !allData.length) {
     allData = newData;
   } else {
-    // Append only records newer than the last known timestamp
-    const lastTs = allData[allData.length - 1]?.datetime?.getTime() ?? 0;
-    const added  = newData.filter(d => d.datetime.getTime() > lastTs);
+    const existingTs = new Set(allData.map(d => d.datetime.getTime()));
+    const added = newData.filter(d => !existingTs.has(d.datetime.getTime()));
     if (added.length > 0) {
       allData = [...allData, ...added];
       console.log(`+${added.length} neue Datensätze angehängt`);

@@ -55,6 +55,37 @@ Beim ersten Start wird automatisch ein Python-venv angelegt und alle Abhängigke
 
 ---
 
+## Lokale Einrichtung (Linux, Erstinstallation)
+
+```bash
+# 1. Verzeichnis klonen
+git clone https://github.com/wetterheidi/mws-viewer.git
+cd mws-viewer
+
+# 2. Quantimet-Zugangsdaten eintragen
+cp mws_config.json.template mws_config.json
+nano mws_config.json   # username + password eintragen
+
+# 3. Starten
+chmod +x start_mws_viewer.sh
+./start_mws_viewer.sh
+```
+
+Beim ersten Start wird automatisch ein Python-venv angelegt und alle Abhängigkeiten installiert.
+
+### Seriellen Port unter Linux freischalten
+
+Damit der Viewer die MWS direkt per USB/RS-232 ansprechen kann, muss der Benutzer der Gruppe `dialout` angehören (gibt Zugriff auf `/dev/ttyUSB*`, `/dev/ttyACM*`):
+
+```bash
+sudo usermod -aG dialout $USER
+# danach einmal ab- und neu anmelden (oder: newgrp dialout)
+```
+
+Danach erscheint der Port nach Klick auf **"↻ Ports"** automatisch in der Auswahlliste.
+
+---
+
 ## Server-Deployment (Ubuntu/Debian)
 
 Voraussetzungen: nginx, certbot, Python 3, systemd. DNS-Eintrag (`A mwsviewer → Server-IP`) muss gesetzt sein.
@@ -97,6 +128,7 @@ journalctl -u mws-viewer -f     # Live-Log
 | `requirements.txt` | Python-Abhängigkeiten (flask, requests, pyserial) |
 | `serial_log.txt` | Persistentes Seriell-Log (**nicht im Repo**, gitignored) |
 | `start_mws_viewer.command` | macOS-Starter (Doppelklick im Finder) |
+| `start_mws_viewer.sh` | Linux-Starter (`./start_mws_viewer.sh` im Terminal) |
 | `deploy/nginx-mws-viewer.conf` | nginx-Config (Port 80, SSL via certbot) |
 | `deploy/mws-viewer.service` | systemd-Unit |
 | `deploy/setup-server.sh` | Ersteinrichtungs-Script |
