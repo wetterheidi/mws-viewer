@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MWS Viewer – Berechtigungen</title>
+<style>
+  :root {
+    --bg:      #0d1117;
+    --panel:   #161b22;
+    --border:  #30363d;
+    --text:    #e6edf3;
+    --muted:   #9da7b3;
+    --accent:  #ffd700;
+    --ok:      #3fb950;
+    --err:     #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    background: var(--bg); color: var(--text);
+    font: 16px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+    max-width: 860px; margin-inline: auto;
+  }
+  h1 { font-size: 1.4em; color: var(--accent); margin: 8px 0 4px; }
+  h1 small { color: var(--muted); font-weight: normal; font-size: 0.6em; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px; margin: 14px 0;
+  }
+  .panel h2 { font-size: 1.05em; margin: 0 0 10px; }
+  label.choice { display: block; padding: 6px 0; cursor: pointer; }
+  input[type="radio"], input[type="checkbox"] {
+    width: 20px; height: 20px; vertical-align: -4px;
+    margin-right: 10px; accent-color: var(--accent); cursor: pointer;
+  }
+  .user-card {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; margin: 10px 0; background: #1b212a;
+  }
+  .user-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .user-name { font-weight: bold; font-size: 1.1em; color: var(--accent); }
+  .devlist { margin: 4px 0; }
+  .devlist label { display: block; padding: 4px 0; cursor: pointer; }
+  .imei { color: var(--muted); font-size: 0.85em; }
+  .unknown { color: var(--err); font-size: 0.85em; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  input[type="text"] {
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; font-size: 1em; min-width: 220px;
+  }
+  button {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 16px; font-size: 1em; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #000; font-weight: bold; border: none; }
+  button.danger  { color: var(--err); }
+  #status { min-height: 1.5em; font-weight: bold; margin: 10px 0; }
+  #status.ok  { color: var(--ok); }
+  #status.err { color: var(--err); }
+  .hint { color: var(--muted); font-size: 0.85em; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>⚙️ MWS Viewer – Berechtigungen <small><a href="/">→ zum Viewer</a></small></h1>
+<div id="status"></div>
+
+<div class="panel">
+  <h2>Standard für Nutzer ohne Eintrag</h2>
+  <label class="choice"><input type="radio" name="def" value="all"> Alle Geräte sichtbar</label>
+  <label class="choice"><input type="radio" name="def" value="none"> Keine Geräte sichtbar (erst nach Freischaltung)</label>
+</div>
+
+<div class="panel">
+  <h2>Nutzer und ihre Geräte</h2>
+  <div id="users"></div>
+  <div class="row">
+    <input type="text" id="newUser" list="htUsers" placeholder="Login-Name (htpasswd)">
+    <datalist id="htUsers"></datalist>
+    <button id="addUser">+ Nutzer hinzufügen</button>
+  </div>
+  <p class="hint">Administratoren (<span id="adminList"></span>) sehen immer alle Geräte
+     und werden hier nicht eingeschränkt. Zugänge selbst werden weiterhin per
+     <code>htpasswd</code> auf dem Server angelegt.</p>
+</div>
+
+<div class="row">
+  <button class="primary" id="save">💾 Speichern</button>
+  <button id="reload">↻ Neu laden</button>
+</div>
+
+<script>
+'use strict';
+
+let devices = [];                 // [{imei, name}]
+let state   = { default: 'all', users: {} };   // users: {name: Set(imei)}
+
+const $ = sel => document.querySelector(sel);
+
+function setStatus(msg, cls) {
+  const el = $('#status');
+  el.textContent = msg;
+  el.className = cls || '';
+}
+
+async function load() {
+  setStatus('Lade…');
+  let r;
+  try {
+    r = await fetch('/api/admin/permissions');
+  } catch (e) {
+    return setStatus('Server nicht erreichbar: ' + e.message, 'err');
+  }
+  if (r.status === 403) return setStatus('Zugriff nur für Administratoren.', 'err');
+  if (!r.ok)            return setStatus('Fehler beim Laden (HTTP ' + r.status + ')', 'err');
+  const data = await r.json();
+
+  devices = data.devices || [];
+  state   = { default: data.permissions.default || 'all', users: {} };
+
+  // Regeln in effektive IMEI-Mengen umrechnen (Alias-Treffer → IMEI)
+  const byName = {};
+  devices.forEach(d => { byName[(d.name || '').toLowerCase()] = d.imei; });
+  for (const [user, rule] of Object.entries(data.permissions.users || {})) {
+    const set = new Set(rule.imeis || []);
+    (rule.names || []).forEach(n => {
+      const imei = byName[(n || '').toLowerCase()];
+      if (imei) set.add(imei);
+    });
+    state.users[user] = set;
+  }
+
+  $('#adminList').textContent = (data.admins || []).join(', ');
+  $('#htUsers').innerHTML = (data.htpasswdUsers || [])
+    .map(u => `<option value="${u}">`).join('');
+
+  render();
+  setStatus(data.deviceError
+    ? 'Geladen – aber Geräteliste nicht verfügbar: ' + data.deviceError
+    : 'Geladen. ' + devices.length + ' Geräte, '
+      + Object.keys(state.users).length + ' Nutzer mit Einschränkung.',
+    data.deviceError ? 'err' : 'ok');
+}
+
+function render() {
+  document.querySelectorAll('input[name="def"]').forEach(rb => {
+    rb.checked = (rb.value === state.default);
+  });
+
+  const box = $('#users');
+  box.innerHTML = '';
+  const userNames = Object.keys(state.users).sort();
+  if (!userNames.length) {
+    box.innerHTML = '<p class="hint">Noch keine Einschränkungen – alle Nutzer folgen dem Standard oben.</p>';
+  }
+
+  for (const user of userNames) {
+    const set  = state.users[user];
+    const card = document.createElement('div');
+    card.className = 'user-card';
+
+    const head = document.createElement('div');
+    head.className = 'user-head';
+    head.innerHTML = `<span class="user-name">${user}</span>`;
+    const del = document.createElement('button');
+    del.className = 'danger';
+    del.textContent = '✕ Eintrag entfernen';
+    del.onclick = () => {
+      if (confirm(`Eintrag für "${user}" entfernen? Der Nutzer folgt dann wieder dem Standard.`)) {
+        delete state.users[user];
+        render();
+      }
+    };
+    head.appendChild(del);
+    card.appendChild(head);
+
+    const list = document.createElement('div');
+    list.className = 'devlist';
+    for (const d of devices) {
+      const lbl = document.createElement('label');
+      const cb  = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = set.has(d.imei);
+      cb.onchange = () => { cb.checked ? set.add(d.imei) : set.delete(d.imei); };
+      lbl.appendChild(cb);
+      lbl.append(`${d.name} `);
+      const sp = document.createElement('span');
+      sp.className = 'imei';
+      sp.textContent = `(${d.imei})`;
+      lbl.appendChild(sp);
+      list.appendChild(lbl);
+    }
+    // IMEIs aus der Regel, die aktuell nicht in der Geräteliste auftauchen
+    const known = new Set(devices.map(d => d.imei));
+    for (const imei of [...set].filter(i => !known.has(i)).sort()) {
+      const lbl = document.createElement('label');
+      const cb  = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = true;
+      cb.onchange = () => { cb.checked ? set.add(imei) : set.delete(imei); };
+      lbl.appendChild(cb);
+      lbl.append(`${imei} `);
+      const sp = document.createElement('span');
+      sp.className = 'unknown';
+      sp.textContent = '(nicht in aktueller Geräteliste)';
+      lbl.appendChild(sp);
+      list.appendChild(lbl);
+    }
+    card.appendChild(list);
+
+    const row = document.createElement('div');
+    row.className = 'row';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.placeholder = 'IMEI manuell hinzufügen';
+    const btn = document.createElement('button');
+    btn.textContent = '+ IMEI';
+    btn.onclick = () => {
+      const v = inp.value.trim();
+      if (v) { set.add(v); inp.value = ''; render(); }
+    };
+    row.append(inp, btn);
+    card.appendChild(row);
+
+    box.appendChild(card);
+  }
+}
+
+$('#addUser').onclick = () => {
+  const name = $('#newUser').value.trim().toLowerCase();
+  if (!name) return;
+  if (!state.users[name]) state.users[name] = new Set();
+  $('#newUser').value = '';
+  render();
+};
+
+document.querySelectorAll('input[name="def"]').forEach(rb => {
+  rb.onchange = () => { if (rb.checked) state.default = rb.value; };
+});
+
+$('#save').onclick = async () => {
+  const payload = {
+    default: state.default,
+    users: Object.fromEntries(
+      Object.entries(state.users).map(([u, set]) => [u, { imeis: [...set].sort() }])
+    ),
+  };
+  setStatus('Speichere…');
+  try {
+    const r = await fetch('/api/admin/permissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await r.json();
+    if (!r.ok) return setStatus('Fehler: ' + (body.error || r.status), 'err');
+    setStatus('Gespeichert ✓ – Änderungen wirken sofort.', 'ok');
+  } catch (e) {
+    setStatus('Fehler beim Speichern: ' + e.message, 'err');
+  }
+};
+
+$('#reload').onclick = load;
+load();
+</script>
+</body>
+</html>

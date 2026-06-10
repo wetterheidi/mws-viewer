@@ -120,6 +120,15 @@ Welche MWS-Geräte ein htpasswd-Nutzer im Viewer sieht, steuert `/apps/mws-viewe
 - Fehlt die Datei komplett, sehen alle Nutzer alle Geräte
 - Die Prüfung greift serverseitig für Geräteliste, Datenabruf, Bilder **und** Kommandos
 - Änderungen wirken sofort — kein Neustart nötig
+- `admins` (optional, Standard `["admin"]`): diese Nutzer sehen immer alle Geräte und dürfen das Admin-Tool nutzen
+
+### Admin-Tool (Web-UI)
+
+Unter **https://mwsviewer.wetterheidi.de/admin** können Berechtigungen per Oberfläche
+verwaltet werden — Nutzer anlegen/entfernen, Geräte per Checkbox zuweisen, Standard
+umstellen. Zugriff hat nur, wer in `admins` steht (Standard: der htpasswd-Nutzer `admin`).
+Die Seite schreibt direkt in `mws_permissions.json`; Änderungen wirken sofort.
+htpasswd-Zugänge selbst werden weiterhin auf dem Server per `htpasswd` angelegt.
 
 Neuen Nutzer anlegen:
 
@@ -151,6 +160,7 @@ journalctl -u mws-viewer -f     # Live-Log
 | Datei | Zweck |
 |---|---|
 | `mws-viewer_16.html` | Viewer (HTML/JS, alle Logik im Browser) |
+| `admin.html` | Admin-Tool für Geräte-Berechtigungen (nur via `/admin`, nur für Admins) |
 | `mws_server.py` | Flask-Proxy: Quantimet-Auth, Geräteliste, Datenexport, Seriell-Bridge |
 | `mws_config.json` | Quantimet-Zugangsdaten (**nicht im Repo**, gitignored) |
 | `mws_config.json.template` | Vorlage für mws_config.json |

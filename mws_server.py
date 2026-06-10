@@ -30,6 +30,7 @@ except ImportError:
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE  = os.path.join(BASE_DIR, 'mws_config.json')
 PERMS_FILE   = os.path.join(BASE_DIR, 'mws_permissions.json')
+HTPASSWD_FILE = '/etc/nginx/.htpasswd-wetterheidi'
 QUANTIMET    = 'https://portal.quantimet.com:3001'
 EXPORT_HOURS = 72   # default look-back window for CSV export
 SERIAL_LOG   = os.path.join(BASE_DIR, 'serial_log.txt')
@@ -62,17 +63,38 @@ def _load_permissions():
         return {'default': 'none'}
 
 
+def _current_user() -> str:
+    return request.headers.get('X-Remote-User', '').strip().lower()
+
+
+def _is_admin() -> bool:
+    admins = _load_permissions().get('admins', ['admin'])
+    return _current_user() in {a.lower() for a in admins if a}
+
+
 def _filter_devices_for_user(devices):
     """Restrict the device list to what the htpasswd user (X-Remote-User) may see."""
-    user  = request.headers.get('X-Remote-User', '').strip().lower()
+    user  = _current_user()
     perms = _load_permissions()
-    rule  = perms.get('users', {}).get(user)
+    if user and user in {a.lower() for a in perms.get('admins', ['admin'])}:
+        return devices   # Administratoren sehen immer alles
+    rule = perms.get('users', {}).get(user)
     if rule is None:
         return devices if perms.get('default', 'all') == 'all' else []
     imeis = set(rule.get('imeis', []))
     names = {n.lower() for n in rule.get('names', [])}
     return [d for d in devices
             if d['imei'] in imeis or (d.get('name') or '').lower() in names]
+
+
+def _htpasswd_users() -> list:
+    """Usernames from the nginx htpasswd file (no hashes). Empty list if unreadable."""
+    try:
+        with open(HTPASSWD_FILE, encoding='utf-8') as fh:
+            return sorted({ln.split(':', 1)[0].strip().lower()
+                           for ln in fh if ':' in ln})
+    except Exception:
+        return []
 
 
 def _do_login(cfg):
@@ -422,6 +444,77 @@ def api_command():
         return jsonify({'error': str(exc)}), 500
 
 
+@app.route('/admin')
+def admin_page():
+    if not _is_admin():
+        return Response('Zugriff nur für Administratoren.', status=403,
+                        mimetype='text/plain; charset=utf-8')
+    return send_from_directory(BASE_DIR, 'admin.html')
+
+
+@app.route('/api/admin/permissions')
+def api_admin_get_permissions():
+    """Current permissions + full device list + htpasswd usernames (admin only)."""
+    if not _is_admin():
+        return jsonify({'error': 'Zugriff nur für Administratoren'}), 403
+    perms = _load_permissions()
+    device_error = ''
+    try:
+        devices = [{'imei': d['imei'], 'name': d.get('name') or d['imei']}
+                   for d in get_devices()]
+    except Exception as exc:
+        devices = []
+        device_error = str(exc)
+    return jsonify({
+        'permissions':   {'default': perms.get('default', 'all'),
+                          'users':   perms.get('users', {})},
+        'admins':        perms.get('admins', ['admin']),
+        'devices':       devices,
+        'deviceError':   device_error,
+        'htpasswdUsers': _htpasswd_users(),
+    })
+
+
+@app.route('/api/admin/permissions', methods=['POST'])
+def api_admin_set_permissions():
+    """Validate and write mws_permissions.json (admin only)."""
+    if not _is_admin():
+        return jsonify({'error': 'Zugriff nur für Administratoren'}), 403
+
+    body    = request.get_json(force=True) or {}
+    default = body.get('default', 'all')
+    if default not in ('all', 'none'):
+        return jsonify({'error': "default muss 'all' oder 'none' sein"}), 400
+    users_in = body.get('users', {})
+    if not isinstance(users_in, dict):
+        return jsonify({'error': 'users muss ein Objekt sein'}), 400
+
+    users = {}
+    for name, rule in users_in.items():
+        name = str(name).strip().lower()
+        if not name or not isinstance(rule, dict):
+            continue
+        imeis = [str(i).strip() for i in rule.get('imeis', []) if str(i).strip()]
+        names = [str(n).strip() for n in rule.get('names', []) if str(n).strip()]
+        entry = {'imeis': imeis}
+        if names:
+            entry['names'] = names
+        users[name] = entry
+
+    new_perms = {'default': default, 'users': users}
+    old = _load_permissions()
+    if 'admins' in old:
+        new_perms['admins'] = old['admins']   # nicht über die UI änderbar
+
+    tmp = PERMS_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as fh:
+        json.dump(new_perms, fh, ensure_ascii=False, indent=2)
+        fh.write('\n')
+    os.replace(tmp, PERMS_FILE)
+    print(f'[PERMS] aktualisiert von {_current_user()!r}: {len(users)} Nutzer, default={default}')
+    return jsonify({'ok': True})
+
+
 @app.route('/api/serial/ports')
 def api_serial_ports():
     if not HAS_SERIAL:
@@ -593,8 +686,19 @@ def index():
     return send_from_directory(BASE_DIR, 'mws-viewer_16.html')
 
 
+# Dateien mit Zugangsdaten/Berechtigungen — nie über die Static-Route ausliefern
+_PRIVATE_FILES = {
+    'mws_config.json', 'mws_config.json.template',
+    'mws_permissions.json', 'mws_permissions.json.template',
+    'admin.html', 'serial_log.txt',
+}
+
+
 @app.route('/<path:filename>')
 def static_files(filename):
+    if (os.path.basename(filename) in _PRIVATE_FILES
+            or filename.startswith(('.', 'venv/', 'deploy/'))):
+        return jsonify({'error': 'not found'}), 404
     return send_from_directory(BASE_DIR, filename)
 
 
