@@ -29,6 +29,7 @@ except ImportError:
 # ── Config ────────────────────────────────────────────────────────────────────
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE  = os.path.join(BASE_DIR, 'mws_config.json')
+PERMS_FILE   = os.path.join(BASE_DIR, 'mws_permissions.json')
 QUANTIMET    = 'https://portal.quantimet.com:3001'
 EXPORT_HOURS = 72   # default look-back window for CSV export
 SERIAL_LOG   = os.path.join(BASE_DIR, 'serial_log.txt')
@@ -46,6 +47,32 @@ _session = requests.Session()   # persists cookies across requests
 def _load_cfg():
     with open(CONFIG_FILE, encoding='utf-8') as fh:
         return json.load(fh)
+
+
+def _load_permissions():
+    """Read mws_permissions.json; without the file every user sees all devices."""
+    try:
+        with open(PERMS_FILE, encoding='utf-8') as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        return {'default': 'all'}
+    except Exception as exc:
+        # Defekte Datei: lieber alles sperren als alles freigeben
+        print(f'[PERMS] Fehler beim Lesen von {PERMS_FILE}: {exc}')
+        return {'default': 'none'}
+
+
+def _filter_devices_for_user(devices):
+    """Restrict the device list to what the htpasswd user (X-Remote-User) may see."""
+    user  = request.headers.get('X-Remote-User', '').strip().lower()
+    perms = _load_permissions()
+    rule  = perms.get('users', {}).get(user)
+    if rule is None:
+        return devices if perms.get('default', 'all') == 'all' else []
+    imeis = set(rule.get('imeis', []))
+    names = {n.lower() for n in rule.get('names', [])}
+    return [d for d in devices
+            if d['imei'] in imeis or (d.get('name') or '').lower() in names]
 
 
 def _do_login(cfg):
@@ -295,7 +322,7 @@ def api_declination():
 def api_devices():
     """Return simplified device list for the viewer's device picker."""
     try:
-        raw = get_devices()
+        raw = _filter_devices_for_user(get_devices())
         result = []
         for d in raw:
             result.append({
@@ -319,7 +346,7 @@ def api_images():
     if not imei:
         return jsonify({'error': 'imei parameter required'}), 400
     try:
-        devices = get_devices()
+        devices = _filter_devices_for_user(get_devices())
         device  = next((d for d in devices if d['imei'] == imei), None)
         if device is None:
             return jsonify({'error': f'Device {imei} not found'}), 404
@@ -352,7 +379,7 @@ def api_command():
         return jsonify({'error': 'imei and command required'}), 400
 
     try:
-        devices = get_devices()
+        devices = _filter_devices_for_user(get_devices())
         device  = next((d for d in devices if d['imei'] == imei), None)
         if device is None:
             return jsonify({'error': f'Device {imei} not found'}), 404
@@ -519,7 +546,7 @@ def api_data():
         return jsonify({'error': 'imei parameter required'}), 400
 
     try:
-        devices = get_devices()
+        devices = _filter_devices_for_user(get_devices())
         device  = next((d for d in devices if d['imei'] == imei), None)
         if device is None:
             return jsonify({'error': f'Device {imei} not found'}), 404

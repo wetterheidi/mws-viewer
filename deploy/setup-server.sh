@@ -35,6 +35,16 @@ if [ ! -f "$APP_DIR/mws_config.json" ]; then
     echo ""
 fi
 
+# 3b. Nutzer-Geräte-Zuordnung anlegen wenn nicht vorhanden (optional, default: alle sehen alles)
+if [ ! -f "$APP_DIR/mws_permissions.json" ]; then
+    cp "$APP_DIR/mws_permissions.json.template" "$APP_DIR/mws_permissions.json"
+    chown www-data:www-data "$APP_DIR/mws_permissions.json"
+    echo ""
+    echo "Optional: Geräte-Berechtigungen pro htpasswd-Nutzer eintragen:"
+    echo "  nano $APP_DIR/mws_permissions.json"
+    echo ""
+fi
+
 # 4. nginx konfigurieren
 cp "$APP_DIR/deploy/nginx-mws-viewer.conf" "$NGINX_CONF"
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/$DOMAIN

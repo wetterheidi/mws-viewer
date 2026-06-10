@@ -99,6 +99,35 @@ nano /apps/mws-viewer/mws_config.json
 systemctl restart mws-viewer
 ```
 
+### Geräte-Berechtigungen pro Nutzer (optional)
+
+Welche MWS-Geräte ein htpasswd-Nutzer im Viewer sieht, steuert `/apps/mws-viewer/mws_permissions.json`:
+
+```json
+{
+  "default": "all",
+  "users": {
+    "olli": {
+      "imeis": ["300434061234567"],
+      "names": ["Runway"]
+    }
+  }
+}
+```
+
+- Ein Gerät ist sichtbar, wenn seine IMEI in `imeis` **oder** sein Quantimet-Name in `names` steht
+- `default` gilt für Nutzer ohne Eintrag: `"all"` = alle Geräte, `"none"` = keine
+- Fehlt die Datei komplett, sehen alle Nutzer alle Geräte
+- Die Prüfung greift serverseitig für Geräteliste, Datenabruf, Bilder **und** Kommandos
+- Änderungen wirken sofort — kein Neustart nötig
+
+Neuen Nutzer anlegen:
+
+```bash
+htpasswd /etc/nginx/.htpasswd-wetterheidi olli   # 1. Zugang anlegen
+nano /apps/mws-viewer/mws_permissions.json       # 2. Geräte zuweisen
+```
+
 ### Updates einspielen
 
 ```bash
@@ -125,6 +154,8 @@ journalctl -u mws-viewer -f     # Live-Log
 | `mws_server.py` | Flask-Proxy: Quantimet-Auth, Geräteliste, Datenexport, Seriell-Bridge |
 | `mws_config.json` | Quantimet-Zugangsdaten (**nicht im Repo**, gitignored) |
 | `mws_config.json.template` | Vorlage für mws_config.json |
+| `mws_permissions.json` | Geräte-Berechtigungen pro htpasswd-Nutzer (**nicht im Repo**, gitignored) |
+| `mws_permissions.json.template` | Vorlage für mws_permissions.json |
 | `requirements.txt` | Python-Abhängigkeiten (flask, requests, pyserial) |
 | `serial_log.txt` | Persistentes Seriell-Log (**nicht im Repo**, gitignored) |
 | `start_mws_viewer.command` | macOS-Starter (Doppelklick im Finder) |

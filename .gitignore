@@ -1,6 +1,9 @@
 # Credentials — niemals einchecken
 mws_config.json
 
+# Nutzer-Geräte-Zuordnung — serverspezifisch, nicht im Repo
+mws_permissions.json
+
 # Seriell-Log — stationsspezifische Rohdaten, nicht im Repo
 serial_log.txt
 
