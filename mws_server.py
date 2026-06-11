@@ -31,6 +31,7 @@ BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE  = os.path.join(BASE_DIR, 'mws_config.json')
 PERMS_FILE   = os.path.join(BASE_DIR, 'mws_permissions.json')
 HTPASSWD_FILE = '/etc/nginx/.htpasswd-wetterheidi'
+ROLES_FILE    = '/etc/wetterheidi/roles.json'   # zentrale Rollen (user-admin-Tool)
 QUANTIMET    = 'https://portal.quantimet.com:3001'
 EXPORT_HOURS = 72   # default look-back window for CSV export
 SERIAL_LOG   = os.path.join(BASE_DIR, 'serial_log.txt')
@@ -67,16 +68,33 @@ def _current_user() -> str:
     return request.headers.get('X-Remote-User', '').strip().lower()
 
 
+def _admin_users() -> set:
+    """Admins aus der zentralen Rollen-Datei (global + mwsviewer).
+    Fallback auf die admins-Liste in mws_permissions.json, wenn sie fehlt."""
+    try:
+        with open(ROLES_FILE, encoding='utf-8') as fh:
+            roles = json.load(fh)
+        allowed = (list(roles.get('global', []))
+                   + list(roles.get('tools', {}).get('mwsviewer', [])))
+        return {a.lower() for a in allowed if a}
+    except FileNotFoundError:
+        admins = _load_permissions().get('admins', ['admin'])
+        return {a.lower() for a in admins if a}
+    except Exception as exc:
+        print(f'[ROLES] Fehler beim Lesen von {ROLES_FILE}: {exc}')
+        return set()
+
+
 def _is_admin() -> bool:
-    admins = _load_permissions().get('admins', ['admin'])
-    return _current_user() in {a.lower() for a in admins if a}
+    user = _current_user()
+    return bool(user) and user in _admin_users()
 
 
 def _filter_devices_for_user(devices):
     """Restrict the device list to what the htpasswd user (X-Remote-User) may see."""
     user  = _current_user()
     perms = _load_permissions()
-    if user and user in {a.lower() for a in perms.get('admins', ['admin'])}:
+    if user and user in _admin_users():
         return devices   # Administratoren sehen immer alles
     rule = perms.get('users', {}).get(user)
     if rule is None:
@@ -468,7 +486,7 @@ def api_admin_get_permissions():
     return jsonify({
         'permissions':   {'default': perms.get('default', 'all'),
                           'users':   perms.get('users', {})},
-        'admins':        perms.get('admins', ['admin']),
+        'admins':        sorted(_admin_users()),
         'devices':       devices,
         'deviceError':   device_error,
         'htpasswdUsers': _htpasswd_users(),

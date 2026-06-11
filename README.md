@@ -120,13 +120,16 @@ Welche MWS-Geräte ein htpasswd-Nutzer im Viewer sieht, steuert `/apps/mws-viewe
 - Fehlt die Datei komplett, sehen alle Nutzer alle Geräte
 - Die Prüfung greift serverseitig für Geräteliste, Datenabruf, Bilder **und** Kommandos
 - Änderungen wirken sofort — kein Neustart nötig
-- `admins` (optional, Standard `["admin"]`): diese Nutzer sehen immer alle Geräte und dürfen das Admin-Tool nutzen
+- Wer Admin ist, steuert die zentrale Rollen-Datei `/etc/wetterheidi/roles.json`
+  (verwaltet über https://verwaltung.wetterheidi.de): die Einträge `global` und
+  `tools.mwsviewer`. Fehlt die Datei (z.B. lokal), gilt als Fallback die
+  `admins`-Liste in `mws_permissions.json` (Standard `["admin"]`).
 
 ### Admin-Tool (Web-UI)
 
 Unter **https://mwsviewer.wetterheidi.de/admin** können Berechtigungen per Oberfläche
 verwaltet werden — Nutzer anlegen/entfernen, Geräte per Checkbox zuweisen, Standard
-umstellen. Zugriff hat nur, wer in `admins` steht (Standard: der htpasswd-Nutzer `admin`).
+umstellen. Zugriff haben nur Admins (siehe oben).
 Die Seite schreibt direkt in `mws_permissions.json`; Änderungen wirken sofort.
 htpasswd-Zugänge selbst werden weiterhin auf dem Server per `htpasswd` angelegt.
 
