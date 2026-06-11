@@ -133,12 +133,9 @@ umstellen. Zugriff haben nur Admins (siehe oben).
 Die Seite schreibt direkt in `mws_permissions.json`; Änderungen wirken sofort.
 htpasswd-Zugänge selbst werden weiterhin auf dem Server per `htpasswd` angelegt.
 
-Neuen Nutzer anlegen:
-
-```bash
-htpasswd /etc/nginx/.htpasswd-wetterheidi olli   # 1. Zugang anlegen
-nano /apps/mws-viewer/mws_permissions.json       # 2. Geräte zuweisen
-```
+Neue Nutzer und Admin-Rechte werden zentral über **https://verwaltung.wetterheidi.de**
+verwaltet — das komplette Betriebshandbuch dazu steht im Repo
+[wetterheidi/user-admin](https://github.com/wetterheidi/user-admin).
 
 ### Updates einspielen
 
