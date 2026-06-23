@@ -111,6 +111,7 @@ header {
   padding: 12px 24px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
 }
 header .logo {
@@ -896,6 +897,8 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 @media (max-width: 700px) {
   .chart-grid { grid-template-columns: 1fr; }
   .info-grid { grid-template-columns: 1fr 1fr; }
+  header { padding: 10px 16px; }
+  .header-right { margin-left: 0; width: 100%; justify-content: space-between; }
 }
 
 /* ── CAMERA TAB ── */
