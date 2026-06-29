@@ -903,6 +903,19 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   .info-grid { grid-template-columns: 1fr 1fr; }
   header { padding: 10px 16px; }
   .header-right { margin-left: 0; width: 100%; justify-content: space-between; }
+
+  .db-main-layout { grid-template-columns: 1fr 1fr; max-width: 100%; gap: 10px; }
+  .db-compass-col { grid-column: 1 / -1; order: -1; margin-bottom: 4px; }
+  .db-side-block { padding: 10px 12px; }
+  .db-label { white-space: normal; }
+  .db-val { font-size: 22px; }
+  .db-big-val { font-size: 24px; }
+  .db-wx-code { font-size: 18px; }
+}
+
+@media (max-width: 420px) {
+  .db-main-layout { grid-template-columns: 1fr; }
+  .db-compass-col { grid-column: 1; }
 }
 
 /* ── CAMERA TAB ── */
