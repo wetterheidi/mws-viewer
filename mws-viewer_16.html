@@ -57,6 +57,7 @@ body.day-mode .btn-ghost { background: #ffffff; color: var(--text2); border: 1.5
 body.day-mode .btn-ghost:hover { color: var(--text); background: var(--bg3); }
 body.day-mode .unit-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
 body.day-mode .trf-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+body.day-mode .src-switch-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
 body.day-mode .status-dot.ok  { background: #1a6e00; box-shadow: 0 0 6px #1a6e00; }
 body.day-mode .status-dot.warn{ background: #b84d00; }
 body.day-mode .info-card { border: 1.5px solid var(--border); }
@@ -986,6 +987,23 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   color: var(--text3);
   min-width: 80px;
 }
+.src-switch { display: flex; gap: 4px; }
+.src-switch-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-family: var(--head);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.src-switch-btn:hover { color: var(--text); border-color: var(--text3); }
+.src-switch-btn.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+.src-switch-btn.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 #current-file {
   font-family: var(--mono);
   font-size: 11px;
@@ -1144,22 +1162,27 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 <div id="source-section">
   <div class="source-row">
     <span class="source-label">Datenquelle</span>
-    <button class="btn-primary btn-sm" onclick="openFilePicker()">📂 CSV öffnen</button>
-    <input type="file" id="file-input" accept=".csv" style="display:none" onchange="onFileInput(event)">
-    <button class="btn-ghost btn-sm" onclick="document.getElementById('file-input').click()" title="Fallback für Browser ohne File System Access API">Datei wählen</button>
+    <div class="src-switch" id="src-switch">
+      <button class="src-switch-btn" data-src="csv" onclick="setActiveSource('csv')">📂 CSV</button>
+      <button class="src-switch-btn" data-src="qtm" onclick="setActiveSource('qtm')">🌐 Quantimet</button>
+      <button class="src-switch-btn" data-src="ser" onclick="setActiveSource('ser')">🔌 Seriell</button>
+    </div>
     <span id="current-file">Keine Datei geladen</span>
     <button class="btn-ghost btn-sm" id="reload-btn" style="display:none" onclick="reloadFile()">↻ Neu laden</button>
     <button class="btn-ghost btn-sm" onclick="clearAll()" style="margin-left:auto">✕ Leeren</button>
   </div>
+  <div class="source-row" id="csv-row">
+    <button class="btn-primary btn-sm" onclick="openFilePicker()">📂 CSV öffnen</button>
+    <input type="file" id="file-input" accept=".csv" style="display:none" onchange="onFileInput(event)">
+    <button class="btn-ghost btn-sm" onclick="document.getElementById('file-input').click()" title="Fallback für Browser ohne File System Access API">Datei wählen</button>
+  </div>
   <div class="source-row" id="qtm-row">
-    <span class="source-label">Quantimet</span>
     <select id="qtm-device" class="qtm-select" onchange="onQtmDeviceChange()"><option value="">— Gerät wählen —</option></select>
     <button class="btn-ghost btn-sm" onclick="loadQuantimetDevices()" title="Geräteliste aktualisieren">↻ Geräteliste</button>
     <button class="btn-primary btn-sm" onclick="loadFromQuantimet()">🌐 Laden</button>
     <span id="qtm-status" style="font-family:var(--mono);font-size:11px;color:var(--text3);"></span>
   </div>
   <div class="source-row" id="ser-row">
-    <span class="source-label">Seriell</span>
     <select id="ser-port"><option value="">— Port wählen —</option></select>
     <button class="btn-ghost btn-sm" onclick="loadSerialPorts()" title="COM-Ports aktualisieren">↻ Ports</button>
     <button class="btn-primary btn-sm" id="ser-connect-btn" onclick="toggleSerial()">▶ Verbinden</button>
@@ -2422,6 +2445,22 @@ function setCustomRange() {
   };
   document.querySelectorAll('.trf-btn').forEach(b => b.classList.remove('active'));
   applyTimeFilter();
+}
+
+// ─────────────────────────────────────────────
+//  DATENQUELLEN-SWITCHER
+// ─────────────────────────────────────────────
+function setActiveSource(src) {
+  if (src === 'ser' && IS_FILE_PROTOCOL) return; // Seriell erfordert den MWS-Server
+  document.querySelectorAll('.src-switch-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.src === src);
+  });
+  const rows = { csv: 'csv-row', qtm: 'qtm-row', ser: 'ser-row' };
+  Object.entries(rows).forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = key === src ? '' : 'none';
+  });
+  localStorage.setItem('mws-active-source', src);
 }
 
 // ─────────────────────────────────────────────
@@ -4309,19 +4348,25 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const qtmRow = document.getElementById('qtm-row');
     if (qtmRow) {
       qtmRow.innerHTML =
-        '<span class="source-label">Quantimet</span>' +
         '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">' +
         'Quantimet nicht verfügbar im Offline-Modus — ' +
         '<a href="https://mwsviewer.wetterheidi.de" target="_blank" ' +
         'style="color:var(--accent);text-decoration:none">Web-Version öffnen ↗</a>' +
         '</span>';
     }
-    const serRow = document.getElementById('ser-row');
-    if (serRow) serRow.style.display = 'none';
+    const serBtn = document.querySelector('.src-switch-btn[data-src="ser"]');
+    if (serBtn) {
+      serBtn.classList.add('disabled');
+      serBtn.title = 'Seriell erfordert den laufenden MWS-Server';
+    }
   } else {
     // Proactively load available ports
     loadSerialPorts();
   }
+  // Zuletzt gewählte Quelle wiederherstellen (Quantimet als Vorauswahl, außer im Offline-Modus)
+  const savedSource = localStorage.getItem('mws-active-source');
+  const validSource = ['csv','qtm','ser'].includes(savedSource) ? savedSource : null;
+  setActiveSource(IS_FILE_PROTOCOL ? (validSource === 'ser' ? 'csv' : (validSource || 'csv')) : (validSource || 'qtm'));
   const big=`@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:191:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:35:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.82:3013  RH:77  WI:1:?:0.3:S  GU:2:57  LD:?:0:--  CL:1ca14:0:0:2317:0  PW:0.00:0:?:--:90:273:273  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
 @0deN:190:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:15:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.1  BA:1018.89:3013  RH:77  WI:1:?:0.3:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:0:0  PW:0.00:0:?:--:90:272:272  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
