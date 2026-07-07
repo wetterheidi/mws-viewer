@@ -1206,12 +1206,12 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 
 <div id="tab-bar">
   <div class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</div>
-  <div class="tab" onclick="switchTab('table')">📋 Rohtabelle</div>
-  <div class="tab" onclick="switchTab('station')">📡 Station</div>
   <div class="tab" onclick="switchTab('met')">🌤 Meteorologie</div>
   <div class="tab" onclick="switchTab('metar')">✈️ METAR</div>
   <div class="tab" onclick="switchTab('camera')">📷 Kamera</div>
+  <div class="tab" onclick="switchTab('station')">📡 Station</div>
   <div class="tab" id="tab-alerts" onclick="switchTab('alerts')">🔔 Alarme</div>
+  <div class="tab" onclick="switchTab('table')">📋 Rohtabelle</div>
   <div class="tab" onclick="switchTab('docs')">📖 Dokumentation</div>
 </div>
 
@@ -1551,7 +1551,17 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
       </div>
 
       <div class="chart-grid">
-        <!-- Zeile 1: Temperatur+Taupunkt (breit) | Druck | Feuchte -->
+        <!-- Zeile 1: Wind & Böen (ganze Breite) -->
+        <div class="chart-card wide tall">
+          <div class="chart-header"><span class="chart-title" id="title-wind">Wind &amp; Böen (kn)</span></div>
+          <canvas id="chart-wind"></canvas>
+        </div>
+        <!-- Zeile 2: Windrichtung (ganze Breite) -->
+        <div class="chart-card wide tall">
+          <div class="chart-header"><span class="chart-title">Windrichtung (°)</span></div>
+          <canvas id="chart-wdir"></canvas>
+        </div>
+        <!-- Zeile 3: Temperatur+Taupunkt (breit) | Druck | Feuchte -->
         <div class="chart-card wide tall">
           <div class="chart-header"><span class="chart-title" id="title-temp">Lufttemperatur &amp; Taupunkt (°C)</span></div>
           <canvas id="chart-temp"></canvas>
@@ -1563,16 +1573,6 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         <div class="chart-card tall">
           <div class="chart-header"><span class="chart-title">Relative Feuchte (%)</span></div>
           <canvas id="chart-rh"></canvas>
-        </div>
-        <!-- Zeile 2: Wind (breit) -->
-        <div class="chart-card wide tall">
-          <div class="chart-header"><span class="chart-title" id="title-wind">Wind &amp; Böen (kn)</span></div>
-          <canvas id="chart-wind"></canvas>
-        </div>
-        <!-- Zeile 3: Windrichtung (ganze Breite) -->
-        <div class="chart-card wide tall">
-          <div class="chart-header"><span class="chart-title">Windrichtung (°)</span></div>
-          <canvas id="chart-wdir"></canvas>
         </div>
         <!-- Zeile 4: Ceilometer (ganze Breite) -->
         <div class="chart-card wide tall">
