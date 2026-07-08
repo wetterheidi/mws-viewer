@@ -3187,8 +3187,7 @@ function cvtVis(mi) {
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  const tabs=['dashboard','table','station','met','metar','camera','alerts','docs'];
-  document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
+  document.querySelector(`.tab[onclick="switchTab('${id}')"]`).classList.add('active');
   document.getElementById('panel-'+id).classList.add('active');
   if (id==='alerts') {
     renderAlertsPanel();
