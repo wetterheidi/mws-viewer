@@ -10,6 +10,7 @@ import collections
 import datetime
 import json
 import os
+import re
 import threading
 import time
 
@@ -642,6 +643,31 @@ def api_serial_data():
     )
 
 
+# Bekannte @0deN-Tag-Namen (siehe parsePacket() im Viewer). Quantimet liefert
+# fullPacket.value nicht mehr zuverlässig mit \r\n zwischen den Tag-Gruppen —
+# manchmal fehlt jeglicher Trenner, wodurch die Tags aneinandergeklebt ankommen
+# (z. B. "...000:ZZT:26/08/21,...LA:53.5..."). Der Viewer-Parser braucht aber
+# einen Whitespace vor jedem Tag, um Werte korrekt zu begrenzen (sonst
+# verschluckt z. B. der T:-Zeitstempel den kompletten Rest des Pakets und
+# ergibt ein ungültiges Datum → der Datensatz wird komplett verworfen).
+_PACKET_TAGS = ['LA', 'LO', 'EL', 'OR', 'TA', 'BA', 'RH', 'WI', 'GU', 'LD',
+                'CL', 'PW', 'VI', 'XA', 'XD', 'B', 'T']
+_TAG_RE = re.compile('(' + '|'.join(_PACKET_TAGS) + r'):')
+
+
+def _normalize_packet_spacing(packet: str) -> str:
+    """Insert a space before any known tag that isn't already whitespace-separated."""
+    def repl(m):
+        i = m.start()
+        if i == 0 or packet[i - 1].isspace():
+            return m.group(0)
+        # Zwei Leerzeichen, nicht eins: der Viewer-Parser erlaubt ein einzelnes
+        # Leerzeichen innerhalb eines Werts (Fortsetzungslogik) und würde bei
+        # nur einem Trenner den nächsten Tag versehentlich mit aufsaugen.
+        return '  ' + m.group(0)
+    return _TAG_RE.sub(repl, packet)
+
+
 @app.route('/api/data')
 def api_data():
     """
@@ -685,6 +711,8 @@ def api_data():
                 continue
             # Collapse \r\n to spaces → single-line @0deN format the viewer expects
             packet = packet.replace('\r\n', '  ').strip()
+            # Belt-and-braces: re-insert separators if Quantimet dropped them entirely
+            packet = _normalize_packet_spacing(packet)
             if not packet.endswith(';'):
                 packet += '  ;'
             lines.append(packet)
