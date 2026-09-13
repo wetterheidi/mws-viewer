@@ -101,7 +101,7 @@ systemctl restart mws-viewer
 
 ### Geräte-Berechtigungen pro Nutzer (optional)
 
-Welche MWS-Geräte ein htpasswd-Nutzer im Viewer sieht, steuert `/apps/mws-viewer/mws_permissions.json`:
+Welche MWS-Geräte ein Nutzer im Viewer sieht, steuert `/apps/mws-viewer/mws_permissions.json`:
 
 ```json
 {
@@ -120,22 +120,23 @@ Welche MWS-Geräte ein htpasswd-Nutzer im Viewer sieht, steuert `/apps/mws-viewe
 - Fehlt die Datei komplett, sehen alle Nutzer alle Geräte
 - Die Prüfung greift serverseitig für Geräteliste, Datenabruf, Bilder **und** Kommandos
 - Änderungen wirken sofort — kein Neustart nötig
-- Wer Admin ist, steuert die zentrale Rollen-Datei `/etc/wetterheidi/roles.json`
-  (verwaltet über https://verwaltung.wetterheidi.de): die Einträge `global` und
-  `tools.mwsviewer`. Fehlt die Datei (z.B. lokal), gilt als Fallback die
-  `admins`-Liste in `mws_permissions.json` (Standard `["admin"]`).
+- Wer Tool-Admin für `mwsviewer` ist, wird zentral beim Pförtner verwaltet
+  (https://verwaltung.wetterheidi.de) — nicht hier. nginx prüft das per
+  `auth_request` und reicht es als `X-Tool-Admin`-Header durch, dem
+  `mws_server.py` einfach vertraut (kein eigener Rollen-Check mehr).
 
 ### Admin-Tool (Web-UI)
 
 Unter **https://mwsviewer.wetterheidi.de/admin** können Berechtigungen per Oberfläche
 verwaltet werden — Nutzer anlegen/entfernen, Geräte per Checkbox zuweisen, Standard
-umstellen. Zugriff haben nur Admins (siehe oben).
+umstellen. Zugriff haben nur Tool-Admins (siehe oben) — das prüft schon nginx,
+bevor die Anfrage `mws_server.py` überhaupt erreicht.
 Die Seite schreibt direkt in `mws_permissions.json`; Änderungen wirken sofort.
-htpasswd-Zugänge selbst werden weiterhin auf dem Server per `htpasswd` angelegt.
 
-Neue Nutzer und Admin-Rechte werden zentral über **https://verwaltung.wetterheidi.de**
-verwaltet — das komplette Betriebshandbuch dazu steht im Repo
-[wetterheidi/user-admin](https://github.com/wetterheidi/user-admin).
+Neue Nutzer, Logins und Tool-Admin-Rechte werden zentral über
+**https://verwaltung.wetterheidi.de** verwaltet — das komplette Betriebshandbuch
+dazu steht im Repo [wetterheidi/Nutzerverwaltung](https://github.com/wetterheidi/Nutzerverwaltung)
+(der alte Rollen-Mechanismus aus `wetterheidi/user-admin` ist abgelöst).
 
 ### Updates einspielen
 

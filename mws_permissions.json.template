@@ -1,6 +1,5 @@
 {
   "default": "all",
-  "admins": ["admin"],
   "users": {
     "olli": {
       "imeis": ["300534066581040", "300534066586070"]

@@ -31,8 +31,7 @@ except ImportError:
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE  = os.path.join(BASE_DIR, 'mws_config.json')
 PERMS_FILE   = os.path.join(BASE_DIR, 'mws_permissions.json')
-HTPASSWD_FILE = '/etc/nginx/.htpasswd-wetterheidi'
-ROLES_FILE    = '/etc/wetterheidi/roles.json'   # zentrale Rollen (user-admin-Tool)
+PFOERTNER    = 'http://127.0.0.1:8100'   # zentraler Pfoertner (Nutzerverwaltung-Repo)
 QUANTIMET    = 'https://portal.quantimet.com:3001'
 EXPORT_HOURS = 72   # default look-back window for CSV export
 SERIAL_LOG   = os.path.join(BASE_DIR, 'serial_log.txt')
@@ -66,37 +65,30 @@ def _load_permissions():
 
 
 def _current_user() -> str:
+    """Nutzername aus dem Pfoertner (via nginx auth_request_set durchgereicht)."""
     return request.headers.get('X-Remote-User', '').strip().lower()
 
 
-def _admin_users() -> set:
-    """Admins aus der zentralen Rollen-Datei (global + mwsviewer).
-    Fallback auf die admins-Liste in mws_permissions.json, wenn sie fehlt."""
-    try:
-        with open(ROLES_FILE, encoding='utf-8') as fh:
-            roles = json.load(fh)
-        allowed = (list(roles.get('global', []))
-                   + list(roles.get('tools', {}).get('mwsviewer', [])))
-        return {a.lower() for a in allowed if a}
-    except FileNotFoundError:
-        admins = _load_permissions().get('admins', ['admin'])
-        return {a.lower() for a in admins if a}
-    except Exception as exc:
-        print(f'[ROLES] Fehler beim Lesen von {ROLES_FILE}: {exc}')
-        return set()
-
-
 def _is_admin() -> bool:
-    user = _current_user()
-    return bool(user) and user in _admin_users()
+    """Admin-Entscheidung anhand des Pfoertner-Headers.
+
+    nginx prueft per auth_request beim Pfoertner (/admin, /api/admin ->
+    /_pfoertner_admin) und reicht durch:
+      X-Tool-Admin  "1" = Tool-Admin-Haekchen fuer mwsviewer im
+                    zentralen Admin-Panel (verwaltung.wetterheidi.de)
+
+    Lokale Entwicklung ohne nginx: Header einfach mitschicken, z.B.
+      curl -H "X-Tool-Admin: 1" http://127.0.0.1:8080/api/admin/permissions
+    """
+    return (request.headers.get('X-Tool-Admin') or '').strip() == '1'
 
 
 def _filter_devices_for_user(devices):
-    """Restrict the device list to what the htpasswd user (X-Remote-User) may see."""
+    """Restrict the device list to what the Pfoertner user (X-Remote-User) may see."""
     user  = _current_user()
     perms = _load_permissions()
-    if user and user in _admin_users():
-        return devices   # Administratoren sehen immer alles
+    if _is_admin():
+        return devices   # Tool-Administratoren sehen immer alles
     rule = perms.get('users', {}).get(user)
     if rule is None:
         return devices if perms.get('default', 'all') == 'all' else []
@@ -106,13 +98,17 @@ def _filter_devices_for_user(devices):
             if d['imei'] in imeis or (d.get('name') or '').lower() in names]
 
 
-def _htpasswd_users() -> list:
-    """Usernames from the nginx htpasswd file (no hashes). Empty list if unreadable."""
+def _pfoertner_users() -> list:
+    """Alle beim Pfoertner bekannten Nutzernamen (fuer die Nutzerauswahl im
+    Admin-Panel). Der Endpunkt ist extra dafuer vorgesehen (siehe
+    Nutzerverwaltung-Repo, gate_app.py: /nutzerliste) und nur von localhost
+    erreichbar. Leere Liste, wenn der Pfoertner nicht erreichbar ist."""
     try:
-        with open(HTPASSWD_FILE, encoding='utf-8') as fh:
-            return sorted({ln.split(':', 1)[0].strip().lower()
-                           for ln in fh if ':' in ln})
-    except Exception:
+        r = requests.get(f'{PFOERTNER}/nutzerliste', timeout=5)
+        r.raise_for_status()
+        return sorted(r.json())
+    except Exception as exc:
+        print(f'[PFOERTNER] Nutzerliste nicht abrufbar: {exc}')
         return []
 
 
@@ -485,12 +481,11 @@ def api_admin_get_permissions():
         devices = []
         device_error = str(exc)
     return jsonify({
-        'permissions':   {'default': perms.get('default', 'all'),
-                          'users':   perms.get('users', {})},
-        'admins':        sorted(_admin_users()),
-        'devices':       devices,
-        'deviceError':   device_error,
-        'htpasswdUsers': _htpasswd_users(),
+        'permissions':  {'default': perms.get('default', 'all'),
+                         'users':   perms.get('users', {})},
+        'devices':      devices,
+        'deviceError':  device_error,
+        'pfoertnerUsers': _pfoertner_users(),
     })
 
 
@@ -521,9 +516,6 @@ def api_admin_set_permissions():
         users[name] = entry
 
     new_perms = {'default': default, 'users': users}
-    old = _load_permissions()
-    if 'admins' in old:
-        new_perms['admins'] = old['admins']   # nicht über die UI änderbar
 
     tmp = PERMS_FILE + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as fh:

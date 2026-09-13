@@ -83,13 +83,14 @@
   <h2>Nutzer und ihre Geräte</h2>
   <div id="users"></div>
   <div class="row">
-    <input type="text" id="newUser" list="htUsers" placeholder="Login-Name (htpasswd)">
-    <datalist id="htUsers"></datalist>
+    <input type="text" id="newUser" list="pfUsers" placeholder="Login-Name (Pförtner)">
+    <datalist id="pfUsers"></datalist>
     <button id="addUser">+ Nutzer hinzufügen</button>
   </div>
-  <p class="hint">Administratoren (<span id="adminList"></span>) sehen immer alle Geräte
-     und werden hier nicht eingeschränkt. Zugänge selbst werden weiterhin per
-     <code>htpasswd</code> auf dem Server angelegt.</p>
+  <p class="hint">Tool-Administratoren sehen immer alle Geräte und werden hier nicht
+     eingeschränkt. Wer Tool-Admin ist, wird im Pförtner verwaltet
+     (<a href="https://verwaltung.wetterheidi.de/admin">verwaltung.wetterheidi.de</a>),
+     nicht hier. Zugänge selbst werden ebenfalls dort angelegt.</p>
 </div>
 
 <div class="row">
@@ -138,8 +139,7 @@ async function load() {
     state.users[user] = set;
   }
 
-  $('#adminList').textContent = (data.admins || []).join(', ');
-  $('#htUsers').innerHTML = (data.htpasswdUsers || [])
+  $('#pfUsers').innerHTML = (data.pfoertnerUsers || [])
     .map(u => `<option value="${u}">`).join('');
 
   render();
