@@ -505,6 +505,7 @@ tbody td.bad { color: var(--accent3); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); }
 .status-dot.ok { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
 .status-dot.warn { background: var(--accent4); }
+.status-dot.err { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); }
 
 /* ── WIND ROSE ── */
 #windrose-canvas { width: 200px !important; height: 200px !important; max-height: 200px; }
@@ -2030,8 +2031,13 @@ let allData    = [];      // all loaded records (unfiltered)
 let fileHandle = null;    // File System Access API handle
 let pollTimer  = null;    // poll timeout ID
 let pollCountdownTimer = null;
-let pollSecondsLeft = 0;
+let pollDueAt   = 0;      // Zeitpunkt (ms) der nächsten Aktualisierung
+let _pollCycle  = 0;      // wird bei jedem stopPolling() erhöht → veraltete Zyklen erkennen
+let _pollError  = '';     // Fehlermeldung der letzten Aktualisierung ('' = ok)
+let _lastLoadOk = null;   // Zeitpunkt der letzten erfolgreichen Aktualisierung
+let _qtmSeq     = 0;      // Ladenummer: nur die Antwort des jüngsten Requests zählt
 const POLL_MS  = 5 * 60 * 1000;   // 5 minutes
+const QTM_TIMEOUT_MS = 190_000;   // > nginx proxy_read_timeout (180 s)
 let timeFilter = { mode: 'all', hours: 0, from: null, to: null };
 let activeSource  = 'file';   // 'file' | 'quantimet' | 'serial'
 let activeImei    = null;
@@ -2485,8 +2491,10 @@ async function openFilePicker() {
   }
 }
 
+// "↻ Neu laden": je nach aktiver Quelle sofort aktualisieren (und Countdown neu starten)
 async function reloadFile() {
-  await loadFromHandle(false);
+  if (activeSource === 'file' && !fileHandle) return;
+  await runPoll();
 }
 
 async function loadFromHandle(fresh) {
@@ -2539,7 +2547,9 @@ function processText(text, fresh) {
     const existingTs = new Set(allData.map(d => d.datetime.getTime()));
     const added = newData.filter(d => !existingTs.has(d.datetime.getTime()));
     if (added.length > 0) {
-      allData = [...allData, ...added];
+      // Sortieren: verspätet übertragene Iridium-Pakete können älter sein als
+      // der bisher letzte Datensatz — viele Stellen lesen allData/parsedData[length-1].
+      allData = [...allData, ...added].sort((a, b) => a.datetime - b.datetime);
       console.log(`+${added.length} neue Datensätze angehängt`);
     }
   }
@@ -2552,38 +2562,84 @@ function processText(text, fresh) {
 function startPolling() {
   stopPolling();
   const interval = activeSource === 'serial' ? SERIAL_POLL_MS : POLL_MS;
-  pollSecondsLeft = interval / 1000;
+  pollDueAt = Date.now() + interval;
   updatePollDisplay();
+  // Countdown aus pollDueAt berechnen statt herunterzuzählen — im Hintergrund-Tab
+  // drosselt der Browser setInterval, ein Zähler würde dann falsch anzeigen.
+  pollCountdownTimer = setInterval(updatePollDisplay, 1000);
+  pollTimer = setTimeout(runPoll, interval);
+}
 
-  pollCountdownTimer = setInterval(() => {
-    pollSecondsLeft = Math.max(0, pollSecondsLeft - 1);
-    updatePollDisplay();
-  }, 1000);
-
-  pollTimer = setTimeout(async () => {
-    clearInterval(pollCountdownTimer);
+// Ein Aktualisierungs-Zyklus. Startet den nächsten Zyklus nur, wenn zwischenzeitlich
+// niemand stopPolling()/startPolling() aufgerufen hat (frisches "Laden", Gerätewechsel,
+// Trennen) — sonst würde ein veralteter Zyklus das Polling wiederbeleben.
+async function runPoll() {
+  stopPolling();
+  const cycle = _pollCycle;
+  document.getElementById('poll-status').textContent = '● Aktualisiere…';
+  try {
     if (activeSource === 'quantimet') {
       await loadFromQuantimet(false);
     } else if (activeSource === 'serial') {
       await loadFromSerial(false);
     } else {
       await loadFromHandle(false);
+      _pollError = ''; _lastLoadOk = new Date();
     }
-    startPolling();  // restart cycle
-  }, interval);
+  } catch (e) {
+    // Unerwartete Fehler dürfen den Zyklus nicht beenden
+    _pollError = e.message || String(e);
+    console.error('[MWS] Aktualisierung fehlgeschlagen:', e);
+  }
+  if (cycle !== _pollCycle) return;
+  if (_pollError) document.getElementById('status-dot').className = 'status-dot err';
+  startPolling();
 }
 
 function stopPolling() {
+  _pollCycle++;
   if (pollTimer)         { clearTimeout(pollTimer);          pollTimer = null; }
   if (pollCountdownTimer){ clearInterval(pollCountdownTimer); pollCountdownTimer = null; }
   document.getElementById('poll-status').textContent = '';
 }
 
 function updatePollDisplay() {
-  const min = Math.floor(pollSecondsLeft / 60);
-  const sec = pollSecondsLeft % 60;
-  document.getElementById('poll-status').textContent =
-    `● Polling aktiv — nächste Aktualisierung: ${min}:${sec.toString().padStart(2,'0')}`;
+  const left = Math.max(0, Math.round((pollDueAt - Date.now()) / 1000));
+  const min  = Math.floor(left / 60);
+  const sec  = left % 60;
+  const hhmm = d => d.toISOString().slice(11, 16) + ' UTC';
+  let txt = `● Polling aktiv — nächste Aktualisierung: ${min}:${sec.toString().padStart(2,'0')}`;
+  if (_lastLoadOk) txt += ` — zuletzt erfolgreich: ${hhmm(_lastLoadOk)}`;
+  if (_pollError)  txt += ` — ⚠ letzter Versuch fehlgeschlagen: ${_pollError}`;
+  document.getElementById('poll-status').textContent = txt;
+}
+
+// Tab war im Hintergrund/eingefroren oder Rechner im Ruhezustand: überfällige
+// Aktualisierung sofort nachholen, statt auf den gedrosselten Timer zu warten.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && pollTimer && Date.now() >= pollDueAt) runPoll();
+});
+
+// fetch für die eigenen /api-Endpunkte: erkennt Pförtner-Weiterleitung
+// (Sitzung abgelaufen), Server-Fehler mit JSON-Body und hängende Requests.
+async function apiFetch(url, timeoutMs, opts = {}) {
+  let resp;
+  try {
+    resp = await fetch(url, { ...opts, redirect: 'manual', cache: 'no-store',
+                              signal: AbortSignal.timeout(timeoutMs) });
+  } catch (e) {
+    if (e.name === 'TimeoutError') throw new Error(`Zeitüberschreitung nach ${timeoutMs / 1000} s`);
+    throw e;
+  }
+  if (resp.type === 'opaqueredirect' || resp.status === 401) {
+    throw new Error('Sitzung abgelaufen — Seite neu laden (F5)');
+  }
+  if (!resp.ok) {
+    let msg = `HTTP ${resp.status}`;
+    try { const j = await resp.json(); if (j.error) msg += ` — ${j.error}`; } catch {}
+    throw new Error(msg);
+  }
+  return resp;
 }
 
 // ─────────────────────────────────────────────
@@ -2694,11 +2750,11 @@ async function loadFromSerial(fresh = true) {
   await _pollSerStatus();
   const statusEl = document.getElementById('ser-status');
   try {
-    const resp = await fetch(`/api/serial/data?since=${_serOffset}`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const resp  = await apiFetch(`/api/serial/data?since=${_serOffset}`, 15_000);
     const total = parseInt(resp.headers.get('X-Total-Count') || '0', 10);
     const text  = await resp.text();
     _serOffset  = total;
+    _pollError  = ''; _lastLoadOk = new Date();
     if (!text.trim()) {
       if (fresh) {
         document.getElementById('avail-text').textContent = 'Seriell verbunden — warte auf Datenpakete…';
@@ -2712,6 +2768,7 @@ async function loadFromSerial(fresh = true) {
     if (fresh) startPolling();
   } catch (e) {
     statusEl.textContent = `Fehler: ${e.message}`;
+    _pollError = e.message;
   }
 }
 
@@ -2742,37 +2799,50 @@ async function loadQuantimetDevices() {
 
 async function loadFromQuantimet(fresh = true) {
   const sel  = document.getElementById('qtm-device');
-  const imei = sel.value;
+  // Poll-Zyklus: immer das aktuell geladene Gerät aktualisieren, nie das im
+  // Dropdown vorgewählte — gewechselt wird erst nach echtem "Laden".
+  const imei = fresh ? sel.value : activeImei;
   if (!imei) {
-    document.getElementById('qtm-status').textContent = 'Kein Gerät ausgewählt.';
+    if (fresh) document.getElementById('qtm-status').textContent = 'Kein Gerät ausgewählt.';
     return;
   }
   // Frischer Ladevorgang: sofort alten Poll stoppen, damit kein veralteter
   // Zyklus mit der alten IMEI noch in processText(fresh=false) läuft.
   if (fresh) stopPolling();
 
-  // Poll-Zyklus: wenn der Nutzer zwischenzeitlich das Dropdown geändert hat
-  // (ohne "Laden" zu klicken), stimmt sel.value nicht mehr mit activeImei überein.
-  // In diesem Fall den Poll überspringen — erst nach echtem "Laden" wechseln.
-  if (!fresh && activeImei && imei !== activeImei) return;
+  // Ladenummer: kommt die Antwort eines älteren Requests (Poll oder erster von
+  // zwei schnellen "Laden"-Klicks) erst nach einem neueren an, wird sie verworfen.
+  const seq = ++_qtmSeq;
 
   const statusEl = document.getElementById('qtm-status');
   statusEl.textContent = 'Lade Daten…';
   try {
-    const resp = await fetch(`/api/data?imei=${encodeURIComponent(imei)}&hours=72`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const resp = await apiFetch(`/api/data?imei=${encodeURIComponent(imei)}&hours=72`, QTM_TIMEOUT_MS);
+    const ctype = resp.headers.get('Content-Type') || '';
+    if (!ctype.startsWith('text/plain')) {
+      throw new Error(`Unerwartete Antwort (${ctype || 'ohne Content-Type'}) — Seite neu laden (F5)`);
+    }
     const text = await resp.text();
+    if (seq !== _qtmSeq) {
+      console.log(`[MWS] Veraltete Antwort für ${imei} verworfen`);
+      return;
+    }
     lastRawText  = text;
     activeSource = 'quantimet';
     activeImei   = imei;
-    const label  = sel.selectedOptions[0]?.text || imei;
-    document.getElementById('current-file').textContent = `Quantimet: ${label}`;
+    _pollError   = ''; _lastLoadOk = new Date();
+    if (fresh) {
+      const label = sel.selectedOptions[0]?.text || imei;
+      document.getElementById('current-file').textContent = `Quantimet: ${label}`;
+    }
     document.getElementById('reload-btn').style.display = '';
     statusEl.textContent = '';
     processText(text, fresh);
     if (fresh) startPolling();
   } catch (e) {
+    if (seq !== _qtmSeq) return;
     statusEl.textContent = `Fehler: ${e.message}`;
+    _pollError = e.message;
     console.error('loadFromQuantimet:', e);
   }
 }
@@ -4302,6 +4372,8 @@ function onQtmDeviceChange() {
   if (!activeImei || imei === activeImei) return;
   // Sofort löschen — kein falsches Bild für den Nutzer
   stopPolling();
+  _qtmSeq++;           // noch laufende Antwort des alten Geräts verwerfen
+  _pollError = ''; _lastLoadOk = null;
   activeImei = null;
   allData    = [];
   parsedData = [];
