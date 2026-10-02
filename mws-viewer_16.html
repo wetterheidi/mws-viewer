@@ -1293,7 +1293,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
           <div class="db-rwy-input">
             <label>Runway QFU (mag.)</label>
             <input type="number" id="db-rwy-hdg" min="10" max="360" step="10" value="360"
-                   oninput="updateRwyComponents()">
+                   oninput="localStorage.setItem('mws-rwy-hdg', this.value); updateRwyComponents()">
             <span>°</span>
           </div>
           <div class="db-compass-wrap">
@@ -1614,7 +1614,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
       <div class="metar-station-row">
         <label for="metar-icao">ICAO-Kennung</label>
         <input type="text" id="metar-icao" maxlength="4" value="ZZZZ" placeholder="ZZZZ"
-               oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,''); renderMetar(parsedData);"
+               oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,''); localStorage.setItem('mws-metar-icao', this.value); renderMetar(parsedData);"
                title="Vierstellige ICAO-Stationskennung (z.B. EDAH). Ohne offizielle Kennung ZZZZ verwenden.">
         <span class="metar-hint">Vierstellige ICAO-Kennung — ZZZZ für unbekannte / temporäre Station</span>
       </div>
@@ -1683,7 +1683,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
           </tbody>
         </table>
         <h3 class="doc-h3">Einheitenumschaltung</h3>
-        <p>Die gewählten Einheiten werden im Browser gespeichert (localStorage) und bleiben nach einem Reload erhalten.</p>
+        <p>Die gewählten Einheiten werden im Browser gespeichert (localStorage) und bleiben nach einem Reload erhalten — ebenso Tag-/Nachtmodus, Runway-QFU und ICAO-Kennung.</p>
         <table class="doc-table">
           <thead><tr><th>Parameter</th><th>Verfügbare Einheiten</th><th>Basiseinheit (intern)</th></tr></thead>
           <tbody>
@@ -4344,6 +4344,16 @@ window.addEventListener('DOMContentLoaded', ()=>{
       if(m && m[1]===param) btn.classList.toggle('active', m[2]===val);
     });
   });
+  // Restore day/night mode
+  if (localStorage.getItem('mws-daymode') === '1') {
+    document.body.classList.add('day-mode');
+    document.getElementById('day-toggle').textContent = '🌙 Nachtmodus';
+  }
+  // Restore runway heading and METAR station
+  const savedRwy = localStorage.getItem('mws-rwy-hdg');
+  if (savedRwy) document.getElementById('db-rwy-hdg').value = savedRwy;
+  const savedIcao = localStorage.getItem('mws-metar-icao');
+  if (savedIcao) document.getElementById('metar-icao').value = savedIcao;
   // Restore saved alert settings
   loadAlerts();
   // Kontext-abhängige UI-Anpassung
