@@ -35,6 +35,31 @@ Browser-basierter Viewer für Daten der **MWS** (Modular Weather Station) — un
 
 ---
 
+## Tab „📎 Produkte"
+
+Zusatzinformationen **pro Gerät** (nur mit laufendem Server):
+
+- **GRAMET heute (00–24 Z)** für die letzte GPS-Position der MWS, gerechnet mit
+  [meteokit](../meteokit). Modellwahl „Auto": feinstes Modell, das die Position
+  und den ganzen Tag abdeckt (ICON-D2 → ICON-EU → ICON Global, `meteokit/modelpick`);
+  manuell überschreibbar. Die Daten kommen direkt vom Browser von den Open-Meteo-Instanzen.
+- **TAF, Hinweise, Bilder, PDFs**: Tool-Admins veröffentlichen sie im Tab mit
+  Gültigkeitszeitraum (UTC); abgelaufene Produkte sehen nur Admins.
+  Ablage auf dem Server unter `products/<imei>/` (nicht im Repo), max. 20 MB pro Datei.
+
+### GRAMET-Modul neu bauen
+
+`vendor/mws-gramet.js` ist ein eingechecktes Build-Ergebnis — der Server braucht
+kein Node. Nach Änderungen an meteokit (muss neben `mws-viewer` liegen):
+
+```bash
+cd gramet
+npm install      # einmalig
+npm run build    # schreibt ../vendor/mws-gramet.js
+```
+
+---
+
 ## Lokale Einrichtung (macOS, Erstinstallation)
 
 ```bash

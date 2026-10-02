@@ -938,6 +938,12 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 
 /* ── PRODUKTE TAB ── */
 #panel-products { padding: 14px; }
+#gm-card     { margin-bottom: 18px; }
+#gm-card select { background: var(--bg); color: var(--text); border: 1px solid var(--border);
+                  border-radius: 4px; padding: 3px 6px; font-family: var(--mono); font-size: 11px; }
+#gm-card .gm-ctrl { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+#gm-panel    { display: block; height: 620px; border-radius: 4px; overflow: hidden; }
+#gm-panel[hidden] { display: none; }
 .tab-count { margin-left: 6px; font-family: var(--mono); font-size: 11px; color: var(--accent4); }
 .tab-count:empty { display: none; }
 .prod-list   { display: flex; flex-direction: column; gap: 14px; }
@@ -1708,6 +1714,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
           <thead><tr><th>Tab</th><th>Inhalt</th></tr></thead>
           <tbody>
             <tr><td>📋 Rohtabelle</td><td>Alle geparsten Parameter als Tabelle, einheitensensitiv. Farbkodierung: Batterie (grün/gelb), Temperatur (blau), fehlende Werte (—).</td></tr>
+            <tr><td>📎 Produkte</td><td>Zusatzprodukte zum geladenen Gerät: GRAMET des aktuellen Tages (00–24 Z) für die GPS-Position — Modell automatisch (ICON-D2 → ICON-EU → ICON Global, feinstes Modell mit vollständiger Tagesabdeckung) oder manuell wählbar — sowie von Administratoren veröffentlichte TAFs, Hinweise, Bilder und PDFs mit Gültigkeitszeitraum. Abgelaufene Produkte werden ausgeblendet. Nur mit laufendem Server.</td></tr>
             <tr><td>📡 Station</td><td>Stationsfixe (GPS, Kompass, Tilt), Batteriespannungsverlauf, Ceilometer-Rohdaten.</td></tr>
             <tr><td>🌤 Meteorologie</td><td>Zeitreihen aller meteorologischen Parameter inkl. Blitzsensor. Einheitenumschaltung und lineare Offset-Korrektur interaktiv.</td></tr>
             <tr><td>✈️ METAR</td><td>Automatisch erzeugte METAR-Meldungen im europäischen ICAO-Format für jeden Datensatz. Frei eingebbare ICAO-Kennung, farbkodierte Ausgabe, Kopier-Funktion je Zeile.</td></tr>
@@ -2010,6 +2017,19 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
     <div class="cam-controls">
       <button class="btn-ghost" onclick="loadProducts()">↻ Aktualisieren</button>
       <span class="cam-status" id="prod-status">—</span>
+    </div>
+    <div class="prod-card" id="gm-card">
+      <div class="prod-head">
+        <span class="prod-title">GRAMET heute (00–24 Z)</span>
+        <span class="prod-meta" id="gm-meta">—</span>
+        <span class="gm-ctrl">
+          <select id="gm-model" onchange="loadGramet(true)" title="Modell">
+            <option value="auto">Modell: Auto</option>
+          </select>
+          <button class="btn-ghost btn-sm" onclick="loadGramet(true)">↻ Neu laden</button>
+        </span>
+      </div>
+      <gramet-panel id="gm-panel" hidden></gramet-panel>
     </div>
     <form class="prod-form" id="prod-form" style="display:none" onsubmit="uploadProduct(event)">
       <h3>Neues Produkt (Admin)</h3>
@@ -3008,6 +3028,9 @@ let _prodSeq = 0;   // nur die Antwort des jüngsten Requests zählt (Gerätewec
 
 function clearProducts(msg = 'Kein Quantimet-Gerät geladen.') {
   _prodSeq++;
+  _gmSeq++; _gmKey = '';
+  document.getElementById('gm-panel').hidden = true;
+  document.getElementById('gm-meta').textContent = '—';
   document.getElementById('prod-list').innerHTML = '';
   document.getElementById('prod-form').style.display = 'none';
   document.getElementById('products-count').textContent = '';
@@ -3167,6 +3190,78 @@ async function deleteProduct(imei, id, title) {
     loadProducts();
   } catch (e) {
     document.getElementById('prod-status').textContent = `Fehler beim Löschen: ${e.message}`;
+  }
+}
+
+// ── GRAMET des aktuellen Tages (meteokit, vendor/mws-gramet.js) ──
+// Das Modul wird erst beim ersten Öffnen des Tabs geladen. Die Modellwahl
+// ("Auto") übernimmt meteokit: feinstes Modell, das die Position und den
+// ganzen Tag 00–24 Z abdeckt (ICON-D2 → ICON-EU → ICON Global).
+let _gmMod = null;
+let _gmKey = '';      // Position/Tag/Modell des angezeigten GRAMET
+let _gmSeq = 0;
+const GM_MAX_AGE_MS = 30 * 60 * 1000;
+let _gmLoadedAt = 0;
+
+function mwsPosition() {
+  for (let i = allData.length - 1; i >= 0; i--) {
+    const d = allData[i];
+    if (Number.isFinite(d.lat) && Number.isFinite(d.lon)) return { lat: d.lat, lon: d.lon };
+  }
+  return null;
+}
+
+async function loadGrametModule() {
+  if (_gmMod) return _gmMod;
+  _gmMod = await import('./vendor/mws-gramet.js');
+  const sel = document.getElementById('gm-model');
+  for (const [key, label] of Object.entries(_gmMod.MODEL_LABELS)) {
+    const opt = document.createElement('option');
+    opt.value = key; opt.textContent = label;
+    sel.appendChild(opt);
+  }
+  const panel = document.getElementById('gm-panel');
+  panel.addEventListener('close', () => { panel.hidden = true; });
+  return _gmMod;
+}
+
+async function loadGramet(force = false) {
+  const meta  = document.getElementById('gm-meta');
+  const panel = document.getElementById('gm-panel');
+  if (IS_FILE_PROTOCOL) { meta.textContent = 'Nur mit laufendem MWS-Server verfügbar.'; return; }
+  const pos = mwsPosition();
+  if (!pos) { meta.textContent = 'Keine GPS-Position in den Daten.'; panel.hidden = true; return; }
+
+  const model = document.getElementById('gm-model').value;
+  const day   = new Date().toISOString().slice(0, 10);
+  const key   = `${pos.lat.toFixed(2)},${pos.lon.toFixed(2)},${day},${model}`;
+  if (!force && key === _gmKey && Date.now() - _gmLoadedAt < GM_MAX_AGE_MS) return;
+
+  const seq = ++_gmSeq;
+  meta.textContent = `${pos.lat.toFixed(3)}, ${pos.lon.toFixed(3)} · lade Modelldaten…`;
+  try {
+    const mod = await loadGrametModule();
+    mod.setUnits({ height: 'm', wind: { ms: 'ms', kmh: 'kmh' }[units.wind] || 'kt' });
+    panel.hidden = false;
+    panel.loading = 'Lade Modelldaten …';
+    const res = await mod.loadDayGrid(pos.lat, pos.lon, { model });
+    if (seq !== _gmSeq) return;
+    _gmKey = key; _gmLoadedAt = Date.now();
+    const fallback = res.tried.length ? ` (statt ${res.tried.map(t => t.model).join(', ')})` : '';
+    meta.textContent = `${pos.lat.toFixed(3)}, ${pos.lon.toFixed(3)} · ${model === 'auto' ? 'Auto: ' : ''}${res.label}${fallback}`;
+    panel.update({
+      grid: res.grid,
+      maxHeight: 3000,
+      zoomLabel: 'bis 3 km',
+      subtitle: `${day} · ${res.label}`,
+      exportNameParts: ['gramet', res.model, day, pos.lat.toFixed(3), pos.lon.toFixed(3)],
+    });
+  } catch (e) {
+    if (seq !== _gmSeq) return;
+    _gmKey = '';
+    meta.textContent = `Fehler: ${e.message}`;
+    panel.hidden = true;
+    console.error('loadGramet:', e);
   }
 }
 
@@ -3498,7 +3593,7 @@ function switchTab(id) {
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelector(`.tab[onclick="switchTab('${id}')"]`).classList.add('active');
   document.getElementById('panel-'+id).classList.add('active');
-  if (id==='products') loadProducts();
+  if (id==='products') { loadProducts(); loadGramet(); }
   if (id==='alerts') {
     renderAlertsPanel();
     renderAlertLog();

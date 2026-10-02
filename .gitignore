@@ -35,3 +35,7 @@ mws-viewer_15.html
 
 # Zusatzprodukte (TAF, Bilder, …) — Serverdaten, nicht im Repo
 products/
+
+# GRAMET-Bundle: Build-Abhängigkeiten (Ergebnis vendor/mws-gramet.js wird eingecheckt)
+gramet/node_modules/
+gramet/package-lock.json

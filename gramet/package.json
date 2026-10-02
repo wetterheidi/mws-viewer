@@ -1,0 +1,15 @@
+{
+  "name": "mws-gramet-bundle",
+  "private": true,
+  "type": "module",
+  "description": "Baut vendor/mws-gramet.js (GRAMET aus meteokit) für den MWS-Viewer",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "meteokit": "file:../../meteokit"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}
