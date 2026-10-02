@@ -13,6 +13,7 @@ import os
 import re
 import threading
 import time
+import uuid
 
 import numpy as np
 import pandas as pd
@@ -36,8 +37,12 @@ QUANTIMET    = 'https://portal.quantimet.com:3001'
 EXPORT_HOURS = 72   # default look-back window for CSV export
 SERIAL_LOG   = os.path.join(BASE_DIR, 'serial_log.txt')
 SERIAL_BAUD  = 9600
+PRODUCTS_DIR = os.path.join(BASE_DIR, 'products')   # Zusatzprodukte je Gerät (TAF, Bilder, …)
+PRODUCT_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt'}
+PRODUCT_TYPES = ('taf', 'text', 'file')
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024   # Uploads (Produkte) max. 20 MB
 
 # ── In-memory cache ────────────────────────────────────────────────────────────
 _lock    = threading.Lock()
@@ -526,6 +531,188 @@ def api_admin_set_permissions():
     return jsonify({'ok': True})
 
 
+# ── Produkte (TAF, Bilder, PDFs je Gerät) ──────────────────────────────────────
+#
+# Ablage: products/<imei>/manifest.json + Dateien <id><ext>.
+# Lesen: jeder Nutzer, der das Gerät sehen darf. Schreiben: nur über
+# /api/admin/… (nginx prüft dort per auth_request beim Pförtner).
+
+_products_lock = threading.Lock()
+_IMEI_RE = re.compile(r'^[0-9A-Za-z_-]{1,40}$')
+_PID_RE  = re.compile(r'^[0-9a-f]{12}$')
+
+
+def _product_dir(imei: str) -> str:
+    if not _IMEI_RE.match(imei or ''):
+        raise ValueError('ungültige IMEI')
+    return os.path.join(PRODUCTS_DIR, imei)
+
+
+def _load_manifest(imei: str) -> list:
+    try:
+        with open(os.path.join(_product_dir(imei), 'manifest.json'), encoding='utf-8') as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        return []
+
+
+def _save_manifest(imei: str, items: list):
+    d = _product_dir(imei)
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, 'manifest.json')
+    tmp  = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as fh:
+        json.dump(items, fh, ensure_ascii=False, indent=2)
+        fh.write('\n')
+    os.replace(tmp, path)
+
+
+def _device_visible(imei: str) -> bool:
+    return any(d['imei'] == imei for d in _filter_devices_for_user(get_devices()))
+
+
+def _parse_utc(value):
+    """'2026-10-02T12:00' / '…Z' → ISO-String in UTC mit 'Z', leer → None."""
+    value = (value or '').strip()
+    if not value:
+        return None
+    dt = datetime.datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
+
+
+def _is_expired(item) -> bool:
+    vt = item.get('valid_to')
+    if not vt:
+        return False
+    now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
+    return vt < now   # gleiches Format → String-Vergleich reicht
+
+
+@app.route('/api/products')
+def api_products():
+    """Produkte eines Geräts. Abgelaufene sieht nur der Admin (zum Aufräumen)."""
+    imei = request.args.get('imei', '').strip()
+    try:
+        _product_dir(imei)
+        if not _device_visible(imei):
+            return jsonify({'error': f'Device {imei} not found'}), 404
+        admin = _is_admin()
+        with _products_lock:
+            items = _load_manifest(imei)
+        out = []
+        for it in items:
+            expired = _is_expired(it)
+            if expired and not admin:
+                continue
+            out.append({**it, 'expired': expired})
+        out.sort(key=lambda it: it.get('created', ''), reverse=True)
+        return jsonify({'products': out, 'isAdmin': admin})
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/api/products/<imei>/<pid>')
+def api_product_file(imei, pid):
+    """Datei eines Produkts ausliefern (nur über die ID aus dem Manifest)."""
+    try:
+        if not _PID_RE.match(pid) or not _device_visible(imei):
+            return jsonify({'error': 'not found'}), 404
+        with _products_lock:
+            item = next((it for it in _load_manifest(imei) if it['id'] == pid), None)
+        if not item or not item.get('file') or (_is_expired(item) and not _is_admin()):
+            return jsonify({'error': 'not found'}), 404
+        return send_from_directory(_product_dir(imei), item['file'],
+                                   download_name=item.get('filename') or item['file'])
+    except ValueError:
+        return jsonify({'error': 'not found'}), 404
+
+
+@app.route('/api/admin/products', methods=['POST'])
+def api_admin_add_product():
+    """Neues Produkt anlegen (multipart/form-data, admin only).
+    Felder: imei, type (taf|text|file), title, valid_from, valid_to, text, file."""
+    if not _is_admin():
+        return jsonify({'error': 'Zugriff nur für Administratoren'}), 403
+    f     = request.form
+    imei  = f.get('imei', '').strip()
+    ptype = f.get('type', '').strip()
+    title = f.get('title', '').strip()[:120]
+    text  = f.get('text', '').strip()
+    try:
+        pdir = _product_dir(imei)
+        valid_from = _parse_utc(f.get('valid_from'))
+        valid_to   = _parse_utc(f.get('valid_to'))
+    except ValueError as exc:
+        return jsonify({'error': f'Ungültige Eingabe: {exc}'}), 400
+    if ptype not in PRODUCT_TYPES:
+        return jsonify({'error': f"type muss {'|'.join(PRODUCT_TYPES)} sein"}), 400
+    if valid_from and valid_to and valid_to <= valid_from:
+        return jsonify({'error': 'Gültig bis muss nach Gültig ab liegen'}), 400
+
+    pid  = uuid.uuid4().hex[:12]
+    item = {
+        'id': pid, 'type': ptype, 'title': title,
+        'valid_from': valid_from, 'valid_to': valid_to,
+        'created': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%MZ'),
+        'author': _current_user(),
+    }
+    upload = request.files.get('file')
+    if ptype == 'file':
+        if not upload or not upload.filename:
+            return jsonify({'error': 'Keine Datei übergeben'}), 400
+        ext = os.path.splitext(upload.filename)[1].lower()
+        if ext not in PRODUCT_EXTS:
+            return jsonify({'error': f"Dateityp {ext or '?'} nicht erlaubt "
+                                     f"({', '.join(sorted(PRODUCT_EXTS))})"}), 400
+        item['file']     = pid + ext
+        item['filename'] = os.path.basename(upload.filename)[:120]
+        item['title']    = title or item['filename']
+    else:
+        if not text:
+            return jsonify({'error': 'Kein Text übergeben'}), 400
+        item['text']  = text[:20000]
+        item['title'] = title or ('TAF' if ptype == 'taf' else 'Hinweis')
+
+    with _products_lock:
+        os.makedirs(pdir, exist_ok=True)
+        if ptype == 'file':
+            upload.save(os.path.join(pdir, item['file']))
+        items = _load_manifest(imei)
+        items.append(item)
+        _save_manifest(imei, items)
+    print(f'[PRODUCTS] {imei}: {ptype} {item["title"]!r} von {_current_user()!r}')
+    return jsonify({'ok': True, 'product': item})
+
+
+@app.route('/api/admin/products/<imei>/<pid>', methods=['DELETE'])
+def api_admin_delete_product(imei, pid):
+    if not _is_admin():
+        return jsonify({'error': 'Zugriff nur für Administratoren'}), 403
+    if not _PID_RE.match(pid):
+        return jsonify({'error': 'not found'}), 404
+    try:
+        pdir = _product_dir(imei)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    with _products_lock:
+        items = _load_manifest(imei)
+        item  = next((it for it in items if it['id'] == pid), None)
+        if not item:
+            return jsonify({'error': 'not found'}), 404
+        if item.get('file'):
+            try:
+                os.remove(os.path.join(pdir, item['file']))
+            except FileNotFoundError:
+                pass
+        _save_manifest(imei, [it for it in items if it['id'] != pid])
+    print(f'[PRODUCTS] {imei}: {pid} gelöscht von {_current_user()!r}')
+    return jsonify({'ok': True})
+
+
 @app.route('/api/serial/ports')
 def api_serial_ports():
     if not HAS_SERIAL:
@@ -735,7 +922,7 @@ _PRIVATE_FILES = {
 @app.route('/<path:filename>')
 def static_files(filename):
     if (os.path.basename(filename) in _PRIVATE_FILES
-            or filename.startswith(('.', 'venv/', 'deploy/'))):
+            or filename.startswith(('.', 'venv/', 'deploy/', 'products/'))):
         return jsonify({'error': 'not found'}), 404
     return send_from_directory(BASE_DIR, filename)
 

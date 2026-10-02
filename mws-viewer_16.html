@@ -936,6 +936,37 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
                 font-family: var(--mono); }
 @media (max-width: 900px) { .cam-imgs { grid-template-columns: repeat(2, 1fr); } }
 
+/* ── PRODUKTE TAB ── */
+#panel-products { padding: 14px; }
+.tab-count { margin-left: 6px; font-family: var(--mono); font-size: 11px; color: var(--accent4); }
+.tab-count:empty { display: none; }
+.prod-list   { display: flex; flex-direction: column; gap: 14px; }
+.prod-card   { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+               padding: 12px 14px; }
+.prod-card.expired { opacity: 0.55; }
+.prod-head   { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.prod-title  { font-family: var(--head); font-size: 16px; font-weight: 700; color: var(--accent); }
+.prod-meta   { font-family: var(--mono); font-size: 11px; color: var(--text2); }
+.prod-head .btn-sm { margin-left: auto; }
+.prod-text   { font-family: var(--mono); font-size: 13px; color: var(--text); white-space: pre-wrap;
+               margin: 0; line-height: 1.5; }
+.prod-img    { max-width: 100%; border-radius: 4px; border: 1px solid var(--border); display: block; }
+.prod-pdf    { width: 100%; height: 70vh; border: 1px solid var(--border); border-radius: 4px;
+               background: #fff; }
+.prod-link   { color: var(--accent); font-family: var(--mono); font-size: 12px; }
+.prod-form   { background: var(--bg2); border: 1px dashed var(--border); border-radius: var(--radius);
+               padding: 12px 14px; margin-bottom: 18px; display: grid; gap: 10px;
+               grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.prod-form h3 { grid-column: 1 / -1; margin: 0; font-family: var(--head); font-size: 14px;
+                color: var(--text2); text-transform: uppercase; letter-spacing: 1px; }
+.prod-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text2); }
+.prod-form input, .prod-form select, .prod-form textarea {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 6px 8px; font-family: var(--mono); font-size: 12px; }
+.prod-form .wide { grid-column: 1 / -1; }
+.prod-form textarea { min-height: 90px; resize: vertical; }
+.prod-form-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+
 /* ── COMMAND PANEL ── */
 .cmd-panel       { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 18px; }
 .cmd-panel-title { font-size: 13px; font-weight: 600; color: var(--text2);
@@ -1209,6 +1240,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
   <div class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</div>
   <div class="tab" onclick="switchTab('met')">🌤 Meteorologie</div>
   <div class="tab" onclick="switchTab('metar')">✈️ METAR</div>
+  <div class="tab" id="tab-products" onclick="switchTab('products')">📎 Produkte<span class="tab-count" id="products-count"></span></div>
   <div class="tab" onclick="switchTab('camera')">📷 Kamera</div>
   <div class="tab" onclick="switchTab('station')">📡 Station</div>
   <div class="tab" id="tab-alerts" onclick="switchTab('alerts')">🔔 Alarme</div>
@@ -1971,6 +2003,44 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
       <span class="cam-status" id="cam-status">—</span>
     </div>
     <div id="cam-grid"></div>
+  </div>
+
+  <!-- TAB: PRODUKTE (TAF, Bilder, PDFs je Gerät) -->
+  <div class="tab-panel" id="panel-products">
+    <div class="cam-controls">
+      <button class="btn-ghost" onclick="loadProducts()">↻ Aktualisieren</button>
+      <span class="cam-status" id="prod-status">—</span>
+    </div>
+    <form class="prod-form" id="prod-form" style="display:none" onsubmit="uploadProduct(event)">
+      <h3>Neues Produkt (Admin)</h3>
+      <label>Typ
+        <select id="prod-type" onchange="onProdTypeChange()">
+          <option value="taf">TAF</option>
+          <option value="text">Text / Hinweis</option>
+          <option value="file">Datei (Bild, PDF, TXT)</option>
+        </select>
+      </label>
+      <label>Titel
+        <input type="text" id="prod-title" maxlength="120" placeholder="optional">
+      </label>
+      <label>Gültig ab (UTC)
+        <input type="datetime-local" id="prod-from">
+      </label>
+      <label>Gültig bis (UTC)
+        <input type="datetime-local" id="prod-to">
+      </label>
+      <label class="wide" id="prod-text-wrap">Text
+        <textarea id="prod-text" oninput="onProdTextInput()" placeholder="TAF EDXX 021100Z 0212/0312 24010KT 9999 SCT030 …"></textarea>
+      </label>
+      <label class="wide" id="prod-file-wrap" style="display:none">Datei
+        <input type="file" id="prod-file" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt">
+      </label>
+      <div class="prod-form-actions">
+        <button type="submit" class="btn-primary">⬆ Veröffentlichen</button>
+        <span class="cam-status" id="prod-form-status"></span>
+      </div>
+    </form>
+    <div class="prod-list" id="prod-list"></div>
   </div>
 
   <div class="tab-panel" id="panel-alerts">
@@ -2838,7 +2908,7 @@ async function loadFromQuantimet(fresh = true) {
     document.getElementById('reload-btn').style.display = '';
     statusEl.textContent = '';
     processText(text, fresh);
-    if (fresh) startPolling();
+    if (fresh) { startPolling(); loadProducts(); }
   } catch (e) {
     if (seq !== _qtmSeq) return;
     statusEl.textContent = `Fehler: ${e.message}`;
@@ -2928,6 +2998,175 @@ async function loadCameraImages() {
   } catch (e) {
     statusEl.textContent = `Fehler: ${e.message}`;
     console.error('loadCameraImages:', e);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  PRODUKTE TAB (TAF, Bilder, PDFs je Gerät)
+// ─────────────────────────────────────────────
+let _prodSeq = 0;   // nur die Antwort des jüngsten Requests zählt (Gerätewechsel)
+
+function clearProducts(msg = 'Kein Quantimet-Gerät geladen.') {
+  _prodSeq++;
+  document.getElementById('prod-list').innerHTML = '';
+  document.getElementById('prod-form').style.display = 'none';
+  document.getElementById('products-count').textContent = '';
+  document.getElementById('prod-status').textContent = msg;
+}
+
+async function loadProducts() {
+  if (IS_FILE_PROTOCOL) { clearProducts('Produkte nur mit laufendem MWS-Server verfügbar.'); return; }
+  const imei = activeImei;
+  if (!imei) { clearProducts(); return; }
+  const seq = ++_prodSeq;
+  const statusEl = document.getElementById('prod-status');
+  statusEl.textContent = 'Lade Produkte…';
+  try {
+    const resp = await fetch(`/api/products?imei=${encodeURIComponent(imei)}`);
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
+    if (seq !== _prodSeq) return;
+    renderProducts(imei, data.products || [], !!data.isAdmin);
+  } catch (e) {
+    if (seq !== _prodSeq) return;
+    statusEl.textContent = `Fehler: ${e.message}`;
+    console.error('loadProducts:', e);
+  }
+}
+
+function fmtProdTime(iso) {
+  return iso ? iso.replace('T', ' ').replace('Z', ' UTC') : '';
+}
+
+function renderProducts(imei, products, isAdmin) {
+  const list = document.getElementById('prod-list');
+  document.getElementById('prod-form').style.display = isAdmin ? '' : 'none';
+  const active = products.filter(p => !p.expired).length;
+  document.getElementById('products-count').textContent = active ? active : '';
+  document.getElementById('prod-status').textContent =
+    products.length ? `${active} gültige(s) Produkt(e)` : 'Keine Produkte für dieses Gerät.';
+  list.innerHTML = '';
+
+  for (const p of products) {
+    const card = document.createElement('div');
+    card.className = 'prod-card' + (p.expired ? ' expired' : '');
+
+    const head = document.createElement('div');
+    head.className = 'prod-head';
+    const title = document.createElement('span');
+    title.className = 'prod-title';
+    title.textContent = p.title;
+    const meta = document.createElement('span');
+    meta.className = 'prod-meta';
+    const valid = p.valid_from || p.valid_to
+      ? `gültig ${fmtProdTime(p.valid_from) || '…'} – ${fmtProdTime(p.valid_to) || '…'}` : '';
+    meta.textContent = [p.expired ? 'ABGELAUFEN' : '', valid,
+                        `erstellt ${fmtProdTime(p.created)}${p.author ? ' · ' + p.author : ''}`]
+                       .filter(Boolean).join(' · ');
+    head.append(title, meta);
+    if (isAdmin) {
+      const del = document.createElement('button');
+      del.className = 'btn-ghost btn-sm';
+      del.textContent = '🗑 Löschen';
+      del.onclick = () => deleteProduct(imei, p.id, p.title);
+      head.appendChild(del);
+    }
+    card.appendChild(head);
+
+    if (p.type === 'file') {
+      const url = `/api/products/${encodeURIComponent(imei)}/${p.id}`;
+      const ext = (p.file || '').split('.').pop().toLowerCase();
+      if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener';
+        const img = document.createElement('img');
+        img.className = 'prod-img'; img.src = url; img.alt = p.title; img.loading = 'lazy';
+        a.appendChild(img);
+        card.appendChild(a);
+      } else if (ext === 'pdf') {
+        const frame = document.createElement('iframe');
+        frame.className = 'prod-pdf'; frame.src = url; frame.title = p.title;
+        card.appendChild(frame);
+      }
+      const link = document.createElement('a');
+      link.className = 'prod-link'; link.href = url; link.target = '_blank'; link.rel = 'noopener';
+      link.textContent = `↗ ${p.filename || p.file} öffnen`;
+      card.appendChild(link);
+    } else {
+      const pre = document.createElement('pre');
+      pre.className = 'prod-text';
+      pre.textContent = p.text || '';
+      card.appendChild(pre);
+    }
+    list.appendChild(card);
+  }
+}
+
+function onProdTypeChange() {
+  const isFile = document.getElementById('prod-type').value === 'file';
+  document.getElementById('prod-text-wrap').style.display = isFile ? 'none' : '';
+  document.getElementById('prod-file-wrap').style.display = isFile ? '' : 'none';
+}
+
+// Gültigkeit DDHH/DDHH aus dem TAF übernehmen (nur in leere Felder).
+// Monat/Jahr aus dem aktuellen UTC-Datum; Tag deutlich vor heute → Folgemonat.
+function onProdTextInput() {
+  if (document.getElementById('prod-type').value !== 'taf') return;
+  const m = document.getElementById('prod-text').value.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
+  if (!m) return;
+  const now = new Date();
+  const toDate = (dd, hh) => {
+    const mo = now.getUTCMonth() + (+dd < now.getUTCDate() - 15 ? 1 : 0);
+    return new Date(Date.UTC(now.getUTCFullYear(), mo, +dd, +hh));   // HH=24 → 00 UTC Folgetag
+  };
+  const fmt = d => d.toISOString().slice(0, 16);
+  const fromEl = document.getElementById('prod-from'), toEl = document.getElementById('prod-to');
+  if (!fromEl.value) fromEl.value = fmt(toDate(m[1], m[2]));
+  if (!toEl.value)   toEl.value   = fmt(toDate(m[3], m[4]));
+}
+
+async function uploadProduct(ev) {
+  ev.preventDefault();
+  const statusEl = document.getElementById('prod-form-status');
+  if (!activeImei) { statusEl.textContent = 'Kein Gerät geladen.'; return; }
+  const type = document.getElementById('prod-type').value;
+  const fd = new FormData();
+  fd.append('imei', activeImei);
+  fd.append('type', type);
+  fd.append('title', document.getElementById('prod-title').value);
+  // datetime-local liefert "YYYY-MM-DDTHH:MM" — hier als UTC gemeint
+  fd.append('valid_from', document.getElementById('prod-from').value);
+  fd.append('valid_to', document.getElementById('prod-to').value);
+  if (type === 'file') {
+    const f = document.getElementById('prod-file').files[0];
+    if (!f) { statusEl.textContent = 'Bitte Datei wählen.'; return; }
+    fd.append('file', f);
+  } else {
+    fd.append('text', document.getElementById('prod-text').value);
+  }
+  statusEl.textContent = 'Lade hoch…';
+  try {
+    const resp = await fetch('/api/admin/products', { method: 'POST', body: fd });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
+    statusEl.textContent = '✓ Veröffentlicht';
+    document.getElementById('prod-form').reset();
+    onProdTypeChange();
+    loadProducts();
+  } catch (e) {
+    statusEl.textContent = `✗ ${e.message}`;
+  }
+}
+
+async function deleteProduct(imei, id, title) {
+  if (!confirm(`Produkt „${title}" löschen?`)) return;
+  try {
+    const resp = await fetch(`/api/admin/products/${encodeURIComponent(imei)}/${id}`, { method: 'DELETE' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
+    loadProducts();
+  } catch (e) {
+    document.getElementById('prod-status').textContent = `Fehler beim Löschen: ${e.message}`;
   }
 }
 
@@ -3259,6 +3498,7 @@ function switchTab(id) {
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelector(`.tab[onclick="switchTab('${id}')"]`).classList.add('active');
   document.getElementById('panel-'+id).classList.add('active');
+  if (id==='products') loadProducts();
   if (id==='alerts') {
     renderAlertsPanel();
     renderAlertLog();
@@ -4378,6 +4618,7 @@ function onQtmDeviceChange() {
   allData    = [];
   parsedData = [];
   _declLat = null; _declLon = null; _lastAutoDecl = null;
+  clearProducts();
   const declInfo = document.getElementById('decl-info');
   if (declInfo) { declInfo.style.display = 'none'; declInfo.textContent = ''; }
   const wdirEl = document.getElementById('off-wdir');

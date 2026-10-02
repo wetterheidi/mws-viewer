@@ -32,3 +32,6 @@ mws-viewer_15.html
 
 # Claude Code interne Dateien
 .claude/
+
+# Zusatzprodukte (TAF, Bilder, …) — Serverdaten, nicht im Repo
+products/
