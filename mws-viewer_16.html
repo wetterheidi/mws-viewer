@@ -3611,7 +3611,7 @@ function renderDashboard(data) {
   set('db-da', da != null ? da.toLocaleString() + ' ft' : '—');
 
   // ── Wetter / Sicht ────────────────────────
-  set('db-wx', r.presentWeather || 'SKC');
+  set('db-wx', r.presentWeather || 'NSW');
 
   if (r.visMi != null) {
     const visM = Math.round(r.visMi * 1609.34);
