@@ -182,7 +182,14 @@ def get_devices() -> list:
             timeout=15,
         )
 
-    r = _retry_on_401(fetch)
+    try:
+        r = _retry_on_401(fetch)
+    except (requests.ConnectionError, requests.Timeout):
+        # Offline: lieber die letzte bekannte Liste als gar keine
+        with _lock:
+            if _devs['list'] is not None:
+                return _devs['list']
+        raise
     body = r.json()
     devices = body['devicesWithBasicInfo']
 
@@ -343,6 +350,15 @@ def _serial_reader():
 
 # ── API routes ─────────────────────────────────────────────────────────────────
 
+def _upstream_error(exc):
+    """Fehlerantwort für Quantimet-Abrufe. Ohne Internet (lokaler Offline-
+    Betrieb) eine verständliche Meldung statt des requests-Tracebacks."""
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return jsonify({'error': 'Quantimet nicht erreichbar — keine Internetverbindung?',
+                        'offline': True}), 503
+    return jsonify({'error': str(exc)}), 500
+
+
 @app.route('/api/declination')
 def api_declination():
     """Compute IGRF magnetic declination locally via ppigrf (no external API needed)."""
@@ -375,9 +391,10 @@ def api_devices():
             })
         return jsonify(result)
     except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(exc), 'type': type(exc).__name__}), 500
+        if not isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+            import traceback
+            traceback.print_exc()
+        return _upstream_error(exc)
 
 
 @app.route('/api/images')
@@ -407,7 +424,7 @@ def api_images():
         timestamps = r.json().get('timestamp', [])
         return jsonify({'timestamps': timestamps, 'imei': imei})
     except Exception as exc:
-        return jsonify({'error': str(exc)}), 500
+        return _upstream_error(exc)
 
 
 @app.route('/api/command', methods=['POST'])
@@ -461,7 +478,7 @@ def api_command():
         print(f'[CMD] status={r.status_code} body={r.text!r}')
         return jsonify({'result': r.text.strip() or 'Command Sent Ok', 'status': r.status_code})
     except Exception as exc:
-        return jsonify({'error': str(exc)}), 500
+        return _upstream_error(exc)
 
 
 @app.route('/admin')
@@ -612,7 +629,7 @@ def api_products():
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
     except Exception as exc:
-        return jsonify({'error': str(exc)}), 500
+        return _upstream_error(exc)
 
 
 @app.route('/api/products/<imei>/<pid>')
@@ -901,7 +918,7 @@ def api_data():
             mimetype='text/plain; charset=utf-8',
         )
     except Exception as exc:
-        return jsonify({'error': str(exc)}), 500
+        return _upstream_error(exc)
 
 
 # ── Static file serving ────────────────────────────────────────────────────────

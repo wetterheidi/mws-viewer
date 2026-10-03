@@ -39,3 +39,6 @@ products/
 # GRAMET-Bundle: Build-Abhängigkeiten (Ergebnis vendor/mws-gramet.js wird eingecheckt)
 gramet/node_modules/
 gramet/package-lock.json
+
+# Offline-Ersteinrichtung: mitgebrachte Python-Pakete (pip download, s. README)
+wheels/

@@ -9,8 +9,20 @@ cd /d "%~dp0"
 if not exist "venv\Scripts\activate.bat" (
     echo Ersteinrichtung: Python-Umgebung wird erstellt (einmalig^)...
     python -m venv venv
-    venv\Scripts\pip install --quiet --upgrade pip
-    venv\Scripts\pip install --quiet -r requirements.txt
+    if exist "wheels\" (
+        REM Offline: Pakete aus dem mitgebrachten Ordner wheels - siehe README, Offline-Betrieb
+        venv\Scripts\pip install --quiet --no-index --find-links wheels -r requirements.txt
+    ) else (
+        venv\Scripts\python -m pip install --quiet --upgrade pip
+        venv\Scripts\pip install --quiet -r requirements.txt
+    )
+    if errorlevel 1 (
+        rmdir /s /q venv
+        echo FEHLER: Python-Pakete konnten nicht installiert werden.
+        echo Die Ersteinrichtung braucht Internet oder einen Ordner "wheels" - siehe README, Offline-Betrieb.
+        pause
+        exit /b 1
+    )
     echo Fertig.
 )
 

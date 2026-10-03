@@ -81,6 +81,24 @@ Ab dem zweiten Start ist der Viewer sofort in wenigen Sekunden bereit.
 3. Im Viewer: **„↻ Ports"** klicken → den angezeigten COM-Port auswählen → **„▶ Verbinden"**
 4. Die Daten laufen in Echtzeit ein; der Viewer fragt alle 30 Sekunden nach neuen Paketen
 
+### Ohne Internet (offline)
+
+Der Viewer funktioniert auch ganz ohne Internet:
+
+- **MWS per Kabel**, CSV-Dateien und eingefügte Rohdaten: voll nutzbar
+- **Missweisung**: wird auf dem Laptop berechnet
+- **GRAMET** (Tab „📎 Produkte"): zeigt den zuletzt gespeicherten Stand für heute,
+  markiert mit „OFFLINE: gespeicherter Stand". Dafür den Viewer **am Vortag oder
+  am selben Tag einmal mit Internet** starten und den Tab „📎 Produkte" öffnen —
+  der Folgetag wird dabei automatisch mitgespeichert. Immer denselben Browser benutzen.
+- **Quantimet, Kamerabilder, Produkte**: nicht verfügbar
+  (Meldung „Quantimet nicht erreichbar — keine Internetverbindung?")
+
+Nur der **allererste Start** (Schritt 4) braucht Internet. Soll der Laptop nie online
+gehen, vorher auf einem Rechner mit Internet die Python-Pakete in einen Ordner
+`wheels` laden und mit auf den USB-Stick kopieren — Befehl siehe README, Abschnitt
+„Offline-Betrieb". `start_mws_viewer.bat` installiert dann von dort.
+
 ---
 
 ## Häufige Probleme
@@ -88,6 +106,7 @@ Ab dem zweiten Start ist der Viewer sofort in wenigen Sekunden bereit.
 | Problem | Lösung |
 |---|---|
 | Schwarzes Fenster schließt sich sofort | Python nicht installiert oder „Add to PATH" vergessen → Schritt 1 wiederholen |
+| „FEHLER: Python-Pakete konnten nicht installiert werden" | Beim ersten Start kein Internet → mit Internet erneut starten oder Ordner `wheels` mitbringen (s. oben) |
 | Kein COM-Port in der Liste | FTDI-Treiber fehlt (Schritt 2) oder Kabel nicht eingesteckt |
 | Browser öffnet sich nicht automatisch | Manuell http://localhost:8080 im Browser aufrufen |
 | „Fehler: Quantimet …" | `mws_config.json` prüfen — Benutzername/Passwort korrekt? |
