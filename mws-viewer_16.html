@@ -4211,9 +4211,85 @@ function baseChartOpts() {
   };
 }
 
-function labels(data) {
-  return data.map(d=>d.datetime?
-    d.datetime.toISOString().replace('T',' ').slice(5,16):d.timeRaw||'?');
+// ─────────────────────────────────────────────
+//  ZEITACHSE — linear in ms (kein Date-Adapter nötig, offline-tauglich)
+// ─────────────────────────────────────────────
+function times(data) {
+  return data.map(d=>d.datetime&&!isNaN(d.datetime)?d.datetime.getTime():null);
+}
+
+function fmtTime(ms) {
+  return new Date(ms).toISOString().replace('T',' ').slice(5,16);
+}
+
+// Runde Tick-Abstände (Minuten), UTC-ausgerichtet
+function niceTimeTicks(min, max) {
+  const steps=[5,10,15,20,30,60,120,180,360,720,1440,2880,10080];
+  const span=(max-min)/60000;
+  const step=(steps.find(s=>span/s<=7)||steps[steps.length-1])*60000;
+  const ticks=[];
+  for(let t=Math.ceil(min/step)*step; t<=max; t+=step) ticks.push({value:t});
+  return ticks;
+}
+
+// Zeitpunkte, an denen die Linie unterbrochen wird: Intervall deutlich größer
+// als die Nachbar-Intervalle (Ausfall) — Moduswechsel 60→20→5 min zählt nicht.
+function gapBreaks(t) {
+  const br=[];
+  for(let i=1;i<t.length;i++){
+    const dt=t[i]-t[i-1];
+    const ref=Math.max(i>1?t[i-1]-t[i-2]:0, i<t.length-1?t[i+1]-t[i]:0);
+    if(ref>0 && dt>2.5*ref && dt>15*60000) br.push(t[i-1]+dt/2);
+  }
+  return br;
+}
+
+// Wie mkChart, aber mit linearer Zeitachse. Datasets mit Werte-Arrays (Index
+// passend zu ts) werden in {x,y} umgewandelt; {x,y}-Datasets bleiben wie sie sind.
+function mkTimeChart(id, ts, cfg) {
+  delete cfg.data.labels;
+  const idx=ts.map((t,i)=>t!=null?i:-1).filter(i=>i>=0);
+  const tv=idx.map(i=>ts[i]);
+  const breaks=gapBreaks(tv);
+  let minDt=Infinity;
+  for(let i=1;i<tv.length;i++) if(tv[i]>tv[i-1]) minDt=Math.min(minDt,tv[i]-tv[i-1]);
+  let hasBar=false;
+
+  cfg.data.datasets.forEach(ds=>{
+    const type=ds.type||cfg.type;
+    if(type==='bar') hasBar=true;
+    if(!Array.isArray(ds.data) || ds.data.some(v=>v!=null&&typeof v==='object')) return;
+    ['backgroundColor','borderColor'].forEach(k=>{
+      if(Array.isArray(ds[k])) ds[k]=idx.map(i=>ds[k][i]);
+    });
+    let pts=idx.map(i=>({x:ts[i],y:ds.data[i],_i:i}));
+    if(type==='line'){
+      if(ds.spanGaps) pts=pts.filter(p=>p.y!=null);
+      pts=pts.concat(breaks.map(x=>({x,y:null}))).sort((a,b)=>a.x-b.x);
+      ds.spanGaps=false;
+    }
+    ds.data=pts;
+  });
+
+  let tMin=Math.min(...tv), tMax=Math.max(...tv);
+  if(!tv.length){ tMin=Date.now()-3600000; tMax=Date.now(); }
+  if(tMin===tMax){ tMin-=1800000; tMax+=1800000; }
+  if(hasBar && isFinite(minDt)){ tMin-=minDt/2; tMax+=minDt/2; }
+
+  const o=cfg.options=cfg.options||{};
+  o.scales=o.scales||{};
+  const x=o.scales.x||baseChartOpts().scales.x;
+  o.scales.x={...x, type:'linear', min:tMin, max:tMax, offset:false,
+    ticks:{...x.ticks, callback:v=>fmtTime(v), maxRotation:0},
+    afterBuildTicks:ax=>{ ax.ticks=niceTimeTicks(ax.min,ax.max); }
+  };
+  o.plugins=o.plugins||{};
+  const tip=o.plugins.tooltip||baseChartOpts().plugins.tooltip;
+  o.plugins.tooltip={...tip, callbacks:{
+    title:items=>items.length?fmtTime(items[0].parsed.x)+' UTC':'',
+    ...(tip.callbacks||{})
+  }};
+  mkChart(id,cfg);
 }
 
 // ─────────────────────────────────────────────
@@ -4516,11 +4592,10 @@ function renderStation(data) {
     </div>`).join('');
 
   // Battery chart
-  const lbl=labels(data);
-  mkChart('chart-batt',{
+  const ts=times(data);
+  mkTimeChart('chart-batt',ts,{
     type:'line',
     data:{
-      labels:lbl,
       datasets:[{
         label:'Spannung (V)',
         data:data.map(d=>d.battV),
@@ -4541,9 +4616,9 @@ function renderStation(data) {
   });
 
   // Compass
-  mkChart('chart-orient',{
+  mkTimeChart('chart-orient',ts,{
     type:'line',
-    data:{labels:lbl,datasets:[{
+    data:{datasets:[{
       label:'Kompass (°)',data:data.map(d=>d.compass),
       borderColor:C.blue(),backgroundColor:C.blue()+'18',fill:true,tension:0.2,pointRadius:1
     }]},
@@ -4551,9 +4626,9 @@ function renderStation(data) {
   });
 
   // Tilt
-  mkChart('chart-tilt',{
+  mkTimeChart('chart-tilt',ts,{
     type:'bar',
-    data:{labels:lbl,datasets:[{
+    data:{datasets:[{
       label:'Tilt (°)',data:data.map(d=>d.tilt),
       backgroundColor:C.green()+'88',borderColor:C.green(),borderWidth:1
     }]},
@@ -4568,7 +4643,7 @@ function redrawMet() {
   if(!parsedData.length) return;
   renderDashboard(parsedData);
   const data=parsedData;
-  const lbl=labels(data);
+  const ts=times(data);
 
   // Update titles
   document.getElementById('title-temp').textContent=`Lufttemperatur (°${units.temp==='K'?'K':units.temp})`;
@@ -4583,9 +4658,9 @@ function redrawMet() {
   // Temp + Taupunkt
   const tempUnitLabel = `°${units.temp==='K'?'K':units.temp}`;
   document.getElementById('title-temp').textContent=`Lufttemperatur & Taupunkt (${tempUnitLabel})`;
-  mkChart('chart-temp',{
+  mkTimeChart('chart-temp',ts,{
     type:'line',
-    data:{labels:lbl,datasets:[
+    data:{datasets:[
       {
         label:`Temp (${tempUnitLabel})`,
         data:data.map(d=>d.tempC!=null?cvtTemp(d.tempC):null),
@@ -4611,9 +4686,9 @@ function redrawMet() {
   });
 
   // Pressure
-  mkChart('chart-pres',{
+  mkTimeChart('chart-pres',ts,{
     type:'line',
-    data:{labels:lbl,datasets:[{
+    data:{datasets:[{
       label:`Druck (${presUnit})`,
       data:data.map(d=>d.pressHPa!=null?cvtPres(d.pressHPa):null),
       borderColor:C.cyan(),backgroundColor:C.cyan()+'22',
@@ -4623,9 +4698,9 @@ function redrawMet() {
   });
 
   // RH
-  mkChart('chart-rh',{
+  mkTimeChart('chart-rh',ts,{
     type:'line',
-    data:{labels:lbl,datasets:[{
+    data:{datasets:[{
       label:'RH (%)',
       data:data.map(d=>d.rh!=null?Math.min(100,Math.max(0,d.rh+offRh)):null),
       borderColor:C.green(),backgroundColor:C.green()+'22',
@@ -4635,9 +4710,9 @@ function redrawMet() {
   });
 
   // Wind + gust
-  mkChart('chart-wind',{
+  mkTimeChart('chart-wind',ts,{
     type:'line',
-    data:{labels:lbl,datasets:[
+    data:{datasets:[
       {label:`Wind (${windLabel})`,data:data.map(d=>d.windKt!=null?cvtWind(d.windKt):null),
        borderColor:C.blue(),backgroundColor:C.blue()+'22',fill:true,tension:0.3,pointRadius:2,spanGaps:true},
       {label:`Böe (${windLabel})`,data:data.map(d=>d.gustKt!=null?cvtWind(d.gustKt):null),
@@ -4647,9 +4722,9 @@ function redrawMet() {
   });
 
   // Visibility
-  mkChart('chart-vis',{
+  mkTimeChart('chart-vis',ts,{
     type:'line',
-    data:{labels:lbl,datasets:[{
+    data:{datasets:[{
       label:`Sicht (${visLabel})`,
       data:data.map(d=>d.visMi!=null?cvtVis(d.visMi):null),
       borderColor:C.purple(),backgroundColor:C.purple()+'22',
@@ -4662,20 +4737,19 @@ function redrawMet() {
   const wrapDir=v=>((v+offWdir)%360+360)%360;
 
   // Wind direction
-  mkChart('chart-wdir',{
+  mkTimeChart('chart-wdir',ts,{
     type:'scatter',
     data:{datasets:[{
       label:'Windrichtung (°)',
-      data:data.map((d,i)=>d.windDir!=null?{x:lbl[i],y:wrapDir(d.windDir)}:null).filter(Boolean),
+      data:data.map((d,i)=>d.windDir!=null&&ts[i]!=null?{x:ts[i],y:wrapDir(d.windDir)}:null).filter(Boolean),
       backgroundColor:C.blue()+'cc',pointRadius:3,
     },{
       label:'Böenrichtung (°)',
-      data:data.map((d,i)=>d.gustDir!=null?{x:lbl[i],y:wrapDir(d.gustDir)}:null).filter(Boolean),
+      data:data.map((d,i)=>d.gustDir!=null&&ts[i]!=null?{x:ts[i],y:wrapDir(d.gustDir)}:null).filter(Boolean),
       backgroundColor:C.yellow()+'cc',pointRadius:3,
     }]},
     options:{...baseChartOpts(),
       scales:{
-        x:{...baseChartOpts().scales.x,type:'category',labels:lbl},
         y:{...baseChartOpts().scales.y,min:0,max:360,ticks:{stepSize:45,callback:v=>['N','NE','E','SE','S','SW','W','NW','N'][Math.round(v/45)]||v,color:C.tick()}}
       },
       plugins:{...baseChartOpts().plugins,legend:{display:true,labels:{color:C.legend(),font:{family:'Barlow Condensed',size:11}}}}
@@ -4685,9 +4759,9 @@ function redrawMet() {
   // Precip
   const precipLabel = units.precip==='mmh' ? 'mm/h' : 'in/h';
   document.getElementById('title-precip').textContent=`Niederschlag (${precipLabel})`;
-  mkChart('chart-precip',{
+  mkTimeChart('chart-precip',ts,{
     type:'bar',
-    data:{labels:lbl,datasets:[{
+    data:{datasets:[{
       label:`Niederschlag (${precipLabel})`,
       data:data.map(d=>d.precipInH!=null?cvtPrecip(d.precipInH):0),
       backgroundColor:C.blue()+'88',borderColor:C.blue(),borderWidth:1
@@ -4706,10 +4780,9 @@ function redrawMet() {
     'TSSN':'#cc5500','VCTS':'#b87c00',
   };
   const accumData = data.map(d=>d.accumPct??null);
-  mkChart('chart-pw',{
+  mkTimeChart('chart-pw',ts,{
     type:'bar',
     data:{
-      labels:lbl,
       datasets:[
         {
           label:'Feuchtesensor (%)',
@@ -4747,7 +4820,7 @@ function redrawMet() {
           ...baseChartOpts().plugins.tooltip,
           callbacks:{
             afterLabel: ctx => {
-              const d = data[ctx.dataIndex];
+              const d = data[ctx.raw?._i ?? ctx.dataIndex];
               return d.presentWeather ? `WX: ${d.presentWeather}` : '';
             }
           }
@@ -4782,14 +4855,10 @@ function redrawMet() {
   // Ceilometer
   const ceilUnit = units.ceil;
   const cvtCeil = m => ceilUnit === 'ft' ? Math.round(m * 3.28084) : m;
-  const ceilData=data.map(d=>({
-    t:d.datetime?d.datetime.toISOString().slice(11,16):d.timeRaw,
-    h:d.ceilH||[]
-  }));
   const allCeil=[];
-  ceilData.forEach(r=>r.h.forEach(v=>{ if(v!=null) allCeil.push({x:r.t,y:cvtCeil(v)}); }));
+  data.forEach((d,i)=>{ if(ts[i]!=null) (d.ceilH||[]).forEach(v=>{ if(v!=null) allCeil.push({x:ts[i],y:cvtCeil(v)}); }); });
   document.getElementById('title-ceil').textContent=`Ceilometer — Wolkenhöhen (${ceilUnit})`;
-  mkChart('chart-ceil',{
+  mkTimeChart('chart-ceil',ts,{
     type:'scatter',
     data:{datasets:[{
       label:`Wolkenhöhe (${ceilUnit})`,
@@ -4800,7 +4869,7 @@ function redrawMet() {
     }]},
     options:{...baseChartOpts(),
       scales:{
-        x:{...baseChartOpts().scales.x,type:'category',labels:[...new Set(ceilData.map(d=>d.t))].sort()},
+        x:{...baseChartOpts().scales.x},
         y:{...baseChartOpts().scales.y,min:0,title:{display:true,text:`Höhe (${ceilUnit})`,color:C.tick(),font:{family:'Barlow Condensed'}}}
       }
     }
@@ -4814,9 +4883,9 @@ function redrawMet() {
     return parseFloat(mi.toFixed(1));
   };
   document.getElementById('title-ld').textContent=`Blitzsensor — Anzahl & Distanz (${ldDistLabel})`;
-  mkChart('chart-ld',{
+  mkTimeChart('chart-ld',ts,{
     type:'bar',
-    data:{labels:lbl,datasets:[
+    data:{datasets:[
       {
         label:'Blitz Anzahl',
         data:data.map(d=>d.ldCount??0),
