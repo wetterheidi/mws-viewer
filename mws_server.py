@@ -34,12 +34,14 @@ CONFIG_FILE  = os.path.join(BASE_DIR, 'mws_config.json')
 PERMS_FILE   = os.path.join(BASE_DIR, 'mws_permissions.json')
 PFOERTNER    = 'http://127.0.0.1:8100'   # zentraler Pfoertner (Nutzerverwaltung-Repo)
 QUANTIMET    = 'https://portal.quantimet.com:3001'
+IMAGE_BASE   = 'https://mws-s3.s3.us-east-1.amazonaws.com/images'   # Kamerabilder: <IMAGE_BASE>/<imei>/<datei>
 EXPORT_HOURS = 72   # default look-back window for CSV export
 SERIAL_LOG   = os.path.join(BASE_DIR, 'serial_log.txt')
 SERIAL_BAUD  = 9600
 PRODUCTS_DIR = os.path.join(BASE_DIR, 'products')   # Zusatzprodukte je Gerät (TAF, Bilder, …)
 PRODUCT_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt'}
 PRODUCT_TYPES = ('taf', 'text', 'file')
+_CMD_RE      = re.compile(r'^[A-Za-z]:[A-Za-z0-9+\-,]*( [A-Za-z]:[A-Za-z0-9+\-,]*)*$')
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024   # Uploads (Produkte) max. 20 MB
@@ -399,7 +401,11 @@ def api_devices():
 
 @app.route('/api/images')
 def api_images():
-    """Return image timestamps for a device (last N hours)."""
+    """Bildsätze eines Geräts (letzte N Stunden).
+
+    Die Dateinamen stehen in den Feldern pict/pict1–pict4 der Einträge (so
+    macht es auch das Quantimet-Portal). Bildsätze sind eigene Einträge mit
+    der Aufnahmezeit — auch die auf Anforderung (I:-Kommando) gemachten."""
     imei  = request.args.get('imei', '').strip()
     hours = int(request.args.get('hours', 48))
     if not imei:
@@ -413,16 +419,27 @@ def api_images():
         start_ms = now_ms - hours * 3_600_000
 
         def fetch(token):
-            return _session.get(
-                f'{QUANTIMET}/unit/entries/timestamps',
-                params={'deviceId': device['id'], 'startTs': start_ms},
+            return _session.post(
+                f'{QUANTIMET}/unit/entries',
+                json={'device': device, 'startTime': start_ms, 'endTime': now_ms},
                 headers=_auth_headers(token),
-                timeout=15,
+                timeout=60,
             )
 
         r = _retry_on_401(fetch)
-        timestamps = r.json().get('timestamp', [])
-        return jsonify({'timestamps': timestamps, 'imei': imei})
+        sets = []
+        for entry in r.json():
+            images = []
+            for key in ('pict', 'pict1', 'pict2', 'pict3', 'pict4'):
+                v = entry.get(key)
+                name = v.get('value') if isinstance(v, dict) else v
+                if name:
+                    images.append({'cam': int(key[-1]) if key[-1].isdigit() else 1,
+                                   'url': f'{IMAGE_BASE}/{imei}/{name}'})
+            if images:
+                sets.append({'ts': entry.get('timestamp'), 'images': images})
+        sets.sort(key=lambda s: s['ts'] or 0, reverse=True)
+        return jsonify({'sets': sets, 'imei': imei})
     except Exception as exc:
         return _upstream_error(exc)
 
@@ -436,6 +453,10 @@ def api_command():
 
     if not imei or not command:
         return jsonify({'error': 'imei and command required'}), 400
+    # Ein oder mehrere Kommandos, durch Leerzeichen getrennt (z.B. "M:2 I:5")
+    command = ' '.join(command.split())
+    if len(command) > 80 or not _CMD_RE.match(command):
+        return jsonify({'error': f'Ungültiges Kommando: {command!r} (Format z.B. "M:2" oder "M:2 I:5")'}), 400
 
     try:
         devices = _filter_devices_for_user(get_devices())
@@ -473,10 +494,49 @@ def api_command():
                 timeout=15,
             )
 
-        r = _retry_on_401(fetch)
-        print(f'[CMD] payload={payload}')
-        print(f'[CMD] status={r.status_code} body={r.text!r}')
+        try:
+            r = _retry_on_401(fetch)
+        except requests.HTTPError as exc:
+            # Quantimet-Antworttext mitgeben statt nur "500 Server Error"
+            resp = exc.response
+            print(f'[CMD] {imei} {command!r} → HTTP {resp.status_code} body={resp.text!r}')
+            return jsonify({'error': f'Quantimet hat abgelehnt (HTTP {resp.status_code})'
+                                     + (f': {resp.text.strip()[:200]}' if resp.text.strip() else '')}), 502
+        print(f'[CMD] {imei} {command!r} → HTTP {r.status_code} body={r.text!r}')
         return jsonify({'result': r.text.strip() or 'Command Sent Ok', 'status': r.status_code})
+    except Exception as exc:
+        return _upstream_error(exc)
+
+
+@app.route('/api/command/history')
+def api_command_history():
+    """Kommando-Verlauf eines Geräts laut Quantimet (letzte N Tage).
+
+    Jeder Eintrag zeigt, ob die Nachricht wirklich an das Gerät ging
+    (MsgStatus, z.B. "MTSBD was sent successfully")."""
+    imei = request.args.get('imei', '').strip()
+    days = int(request.args.get('days', 14))
+    if not imei:
+        return jsonify({'error': 'imei parameter required'}), 400
+    try:
+        devices = _filter_devices_for_user(get_devices())
+        if not any(d['imei'] == imei for d in devices):
+            return jsonify({'error': f'Device {imei} not found'}), 404
+        now_ms = int(time.time() * 1000)
+
+        def fetch(token):
+            return _session.get(
+                f'{QUANTIMET}/unit/commands/history',
+                params={'imei': imei, 'startTime': now_ms - days * 86_400_000, 'endTime': now_ms},
+                headers=_auth_headers(token),
+                timeout=20,
+            )
+
+        r = _retry_on_401(fetch)
+        rows = [{'ts': e.get('ts'), 'command': e.get('Settings', ''), 'status': e.get('MsgStatus', '')}
+                for e in r.json()]
+        rows.sort(key=lambda e: e['ts'] or 0, reverse=True)
+        return jsonify(rows)
     except Exception as exc:
         return _upstream_error(exc)
 

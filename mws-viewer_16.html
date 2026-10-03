@@ -990,6 +990,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
                    background: var(--bg2); color: var(--text1); border: 1px solid var(--border);
                    border-radius: 4px; cursor: pointer; }
 .cmd-btn:hover   { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cmd-btn:disabled { opacity: .5; cursor: wait; pointer-events: none; }
 .cmd-btn-warn    { border-color: #c0392b; color: #c0392b; }
 .cmd-btn-warn:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
 .cmd-custom      { display: flex; gap: 8px; align-items: center; }
@@ -1001,7 +1002,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 .cmd-result.ok   { background: rgba(39,174,96,.15); color: #27ae60; display: block; }
 .cmd-result.err  { background: rgba(192,57,43,.15);  color: #c0392b;  display: block; }
 .cmd-history     { margin-top: 18px; }
-.cmd-history-row { display: grid; grid-template-columns: 130px 90px 1fr;
+.cmd-history-row { display: grid; grid-template-columns: 130px 1.3fr 1fr;
                    font-size: 11px; font-family: var(--mono); padding: 3px 0;
                    border-bottom: 1px solid var(--border); gap: 8px; }
 .cmd-history-row.hdr { color: var(--text2); font-weight: 600; }
@@ -1428,6 +1429,7 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
       <!-- Command Panel (nur Quantimet) -->
       <div class="cmd-panel" id="cmd-panel" style="display:none">
         <div class="cmd-panel-title">📡 MWS Kommandos</div>
+        <div class="cmd-group-label" id="cmd-dev-status" style="margin-bottom:14px"></div>
 
         <div class="cmd-group">
           <div class="cmd-group-label">Betriebsmodus</div>
@@ -1458,6 +1460,24 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
         </div>
 
         <div class="cmd-group">
+          <div class="cmd-group-label">Kamera — Bilder kommen mit der nächsten Übertragung des Geräts</div>
+          <div class="cmd-buttons">
+            <button class="cmd-btn" onclick="sendCommand('I:5')">I:5 — Alle Kameras</button>
+            <button class="cmd-btn" onclick="sendCommand('I:1')">I:1 — Kamera 1</button>
+            <button class="cmd-btn" onclick="sendCommand('I:2')">I:2 — Kamera 2</button>
+            <button class="cmd-btn" onclick="sendCommand('I:3')">I:3 — Kamera 3</button>
+            <button class="cmd-btn" onclick="sendCommand('I:4')">I:4 — Kamera 4</button>
+            <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('I:0')">I:0 — Anforderung abbrechen</button>
+          </div>
+          <div class="cmd-custom" style="margin-top:6px">
+            <input class="cmd-input" id="cmd-cam-hours" type="text" placeholder="UTC, z.B. 0300,2100" style="max-width:160px">
+            <button class="cmd-btn" onclick="sendAutoImageCommand()">i: — Auto-Bilder planen</button>
+            <button class="cmd-btn cmd-btn-warn" onclick="sendCommand('i:-')">i:- — Auto-Bilder aus</button>
+          </div>
+          <div class="cmd-group-label" id="cmd-cam-watch" style="margin-top:6px"></div>
+        </div>
+
+        <div class="cmd-group">
           <div class="cmd-group-label">GPS</div>
           <div class="cmd-buttons">
             <button class="cmd-btn" onclick="sendCommand('G:1')">G:1 — Pos.-Meldung ein</button>
@@ -1484,8 +1504,12 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 
         <div class="cmd-result" id="cmd-result"></div>
 
-        <div class="cmd-history" id="cmd-history" style="display:none">
-          <div class="cmd-group-label" style="margin-bottom:6px">Gesendete Kommandos (diese Sitzung)</div>
+        <div class="cmd-history" id="cmd-history">
+          <div class="cmd-group-label" style="margin-bottom:6px; display:flex; align-items:center; gap:10px">
+            Verlauf laut Quantimet (14 Tage)
+            <button class="cmd-btn" style="padding:2px 8px" onclick="loadCommandHistory()" title="Verlauf neu laden">↻</button>
+            <span id="cmd-history-status"></span>
+          </div>
           <div class="cmd-history-row hdr">
             <span>Zeit (UTC)</span><span>Kommando</span><span>Status</span>
           </div>
@@ -2937,7 +2961,7 @@ async function loadFromQuantimet(fresh = true) {
     document.getElementById('reload-btn').style.display = '';
     statusEl.textContent = '';
     processText(text, fresh);
-    if (fresh) { startPolling(); loadProducts(); }
+    if (fresh) { startPolling(); loadProducts(); resetCommandPanel(); loadCommandHistory(); }
   } catch (e) {
     if (seq !== _qtmSeq) return;
     statusEl.textContent = `Fehler: ${e.message}`;
@@ -2958,71 +2982,56 @@ async function loadCameraImages() {
     statusEl.textContent = 'Kein Quantimet-Gerät geladen.';
     return;
   }
-  statusEl.textContent = 'Lade Timestamps…';
+  statusEl.textContent = 'Lade Bildliste…';
   grid.innerHTML = '';
 
   try {
-    const resp = await apiFetch(`/api/images?imei=${encodeURIComponent(imei)}&hours=48`, 45000);
-    const data = await resp.json();
-    const timestamps = data.timestamps || [];
+    const resp = await apiFetch(`/api/images?imei=${encodeURIComponent(imei)}&hours=48`, 60000);
+    const { sets = [] } = await resp.json();
+    if (imei !== activeImei) return;
 
-    if (!timestamps.length) {
-      statusEl.textContent = 'Keine Einträge gefunden.';
+    if (!sets.length) {
+      statusEl.textContent = 'Keine Bilder in den letzten 48 h.';
       return;
     }
+    statusEl.textContent = `${sets.length} Bildsatz/-sätze (48 h)`;
 
-    const pad2 = n => String(n).padStart(2, '0');
-    let visibleSets = 0;
-
-    timestamps.forEach(({ ts, value }) => {
-      const d   = new Date(ts);
-      const yy  = String(d.getUTCFullYear()).slice(2);
-      const tsStr = yy + pad2(d.getUTCMonth()+1) + pad2(d.getUTCDate())
-                       + pad2(d.getUTCHours())    + pad2(d.getUTCMinutes());
-      const base  = `https://mws-s3.s3.us-east-1.amazonaws.com/images/${imei}/${imei}-${tsStr}`;
-
+    const directions = ['Nord', 'Ost', 'Süd', 'West'];
+    sets.forEach(({ ts, images }) => {
       const set = document.createElement('div');
       set.className = 'cam-set';
-      set.style.display = 'none';
 
       const label = document.createElement('div');
       label.className = 'cam-label';
-      label.textContent = value + ' UTC';
+      label.textContent = new Date(ts).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
       set.appendChild(label);
 
       const imgs = document.createElement('div');
       imgs.className = 'cam-imgs';
 
-      const directions = ['Nord', 'Ost', 'Süd', 'West'];
-      for (let c = 1; c <= 4; c++) {
+      images.forEach(({ cam, url }) => {
         const wrap = document.createElement('div');
         wrap.className = 'cam-img-wrap';
 
         const img = document.createElement('img');
         img.className = 'cam-img';
-        img.alt = `Kamera ${c} – ${directions[c-1]}`;
-        img.onload = () => {
-          set.style.display = '';
-          visibleSets++;
-          statusEl.textContent = `${visibleSets} Bildsatz/-sätze geladen`;
-        };
+        img.alt = `Kamera ${cam} – ${directions[cam-1]}`;
+        img.loading = 'lazy';
         img.onerror = () => { wrap.style.display = 'none'; };
-        img.src = `${base}-${c}.jpg`;
+        img.src = url;
 
         const cap = document.createElement('div');
         cap.className = 'cam-img-cap';
-        cap.textContent = directions[c-1];
+        cap.textContent = directions[cam-1];
 
         wrap.appendChild(img);
         wrap.appendChild(cap);
         imgs.appendChild(wrap);
-      }
+      });
 
       set.appendChild(imgs);
       grid.appendChild(set);
     });
-
-    statusEl.textContent = 'Prüfe Bilder…';
   } catch (e) {
     statusEl.textContent = `Fehler: ${e.message}`;
     console.error('loadCameraImages:', e);
@@ -3506,40 +3515,57 @@ window.addEventListener('online', () => {
   if (_gmStale && document.getElementById('panel-products').classList.contains('active')) loadGramet(true);
 });
 
+// ─────────────────────────────────────────────
+//  MWS KOMMANDOS
+// ─────────────────────────────────────────────
+// Ablauf: Viewer → /api/command → Quantimet → Iridium-Mailbox. Das Gerät holt
+// das Kommando erst bei seiner nächsten Übertragung ab. Ob Quantimet die
+// Nachricht wirklich verschickt hat, zeigt der Verlauf (MsgStatus).
+let _cmdBusy     = false;
+let _cmdHistSeq  = 0;
+let _camWatch    = null;   // {imei, timer} — wartet nach I:-Kommando auf neue Bilder
+const CAM_WATCH_MS = 3 * 60 * 60_000 + 15 * 60_000;   // M:0 sendet nur alle 3 h
+
+function showCmdResult(cls, text) {
+  const el = document.getElementById('cmd-result');
+  el.className = 'cmd-result' + (cls ? ' ' + cls : '');
+  el.textContent = text;
+  el.style.display = 'block';
+}
+
+function activeDeviceLabel() {
+  const opt = [...document.getElementById('qtm-device').options].find(o => o.value === activeImei);
+  return opt?.text || activeImei;
+}
+
 async function sendCommand(cmd) {
-  if (!activeImei) return;
-  const resultEl  = document.getElementById('cmd-result');
-  resultEl.className = 'cmd-result';
-  resultEl.textContent = `Sende ${cmd}…`;
-  resultEl.style.display = 'block';
-  let ok = false, statusText = '';
+  if (_cmdBusy) return;
+  if (!activeImei) {
+    showCmdResult('err', '✗ Kein Quantimet-Gerät geladen — erst "🌐 Laden" klicken');
+    return;
+  }
+  const imei = activeImei, label = activeDeviceLabel();
+  _cmdBusy = true;
+  document.querySelectorAll('#cmd-panel .cmd-btn').forEach(b => b.disabled = true);
+  showCmdResult('', `Sende ${cmd} an ${label}…`);
   try {
-    const resp = await fetch('/api/command', {
+    const resp = await apiFetch('/api/command', 45_000, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({imei: activeImei, command: cmd}),
+      body: JSON.stringify({imei, command: cmd}),
     });
     const data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
-    ok = true;
-    statusText = data.result;
-    resultEl.className = 'cmd-result ok';
-    resultEl.textContent = `✓ ${cmd} — ${statusText}`;
+    showCmdResult('ok', `✓ ${cmd} an ${label} übergeben (${data.result}) — `
+      + 'das Gerät holt es bei seiner nächsten Übertragung ab.');
+    if (/(^| )I:[1-5]/.test(cmd)) watchForNewImages(imei, Date.now());
   } catch (e) {
-    statusText = e.message;
-    resultEl.className = 'cmd-result err';
-    resultEl.textContent = `✗ ${e.message}`;
+    showCmdResult('err', `✗ ${cmd} an ${label}: ${e.message}`);
+  } finally {
+    _cmdBusy = false;
+    document.querySelectorAll('#cmd-panel .cmd-btn').forEach(b => b.disabled = false);
   }
-  // History
-  const now = new Date();
-  const ts  = now.toISOString().replace('T',' ').slice(0,16);
-  const row = document.createElement('div');
-  row.className = 'cmd-history-row';
-  row.innerHTML = `<span>${ts}</span><span>${cmd}</span>`
-    + `<span class="${ok ? 'cmd-history-ok' : 'cmd-history-err'}">${ok ? '✓ ' : '✗ '}${statusText}</span>`;
-  const rows = document.getElementById('cmd-history-rows');
-  rows.prepend(row);
-  document.getElementById('cmd-history').style.display = '';
+  // Quantimet trägt den Versand mit kurzer Verzögerung in den Verlauf ein
+  setTimeout(() => { if (imei === activeImei) loadCommandHistory(); }, 3000);
 }
 
 function sendCommandCustom() {
@@ -3550,14 +3576,138 @@ function sendCommandCustom() {
 function sendElevationCommand() {
   const raw = parseInt(document.getElementById('cmd-elev-input').value, 10);
   if (isNaN(raw) || raw < -9999 || raw > 9999) {
-    const r = document.getElementById('cmd-result');
-    r.className = 'cmd-result err';
-    r.textContent = '✗ Höhe muss zwischen -9999 und +9999 m liegen';
+    showCmdResult('err', '✗ Höhe muss zwischen -9999 und +9999 m liegen');
     return;
   }
   const sign = raw < 0 ? '-' : '+';
   const val  = String(Math.abs(raw)).padStart(4, '0');
   sendCommand(`G:E${sign}${val}`);
+}
+
+// Auto-Bilder zu vollen UTC-Stunden: "0300,2100" → "i:03 i:21" (wie im Quantimet-Portal)
+function sendAutoImageCommand() {
+  const raw = document.getElementById('cmd-cam-hours').value.replace(/\s/g, '');
+  if (!/^([01]\d|2[0-3])00(,([01]\d|2[0-3])00)*$/.test(raw)) {
+    showCmdResult('err', '✗ Volle UTC-Stunden mit Komma getrennt angeben, z.B. 0300,2100');
+    return;
+  }
+  sendCommand(raw.split(',').map(h => 'i:' + h.slice(0, 2)).join(' '));
+}
+
+async function loadCommandHistory() {
+  const imei     = activeImei;
+  const rowsEl   = document.getElementById('cmd-history-rows');
+  const statusEl = document.getElementById('cmd-history-status');
+  if (!imei || IS_FILE_PROTOCOL) return;
+  const seq = ++_cmdHistSeq;
+  statusEl.textContent = 'lade…';
+  try {
+    const resp = await apiFetch(`/api/command/history?imei=${encodeURIComponent(imei)}&days=14`, 30_000);
+    const list = await resp.json();
+    if (seq !== _cmdHistSeq) return;
+    rowsEl.innerHTML = '';
+    list.slice(0, 50).forEach(e => {
+      const ok  = /success/i.test(e.status);
+      const row = document.createElement('div');
+      row.className = 'cmd-history-row';
+      const cells = [
+        [new Date(e.ts).toISOString().replace('T', ' ').slice(0, 16), ''],
+        [e.command, ''],
+        [(ok ? '✓ ' : '✗ ') + e.status, ok ? 'cmd-history-ok' : 'cmd-history-err'],
+      ];
+      cells.forEach(([text, cls]) => {
+        const span = document.createElement('span');
+        span.textContent = text;
+        if (cls) span.className = cls;
+        row.appendChild(span);
+      });
+      rowsEl.appendChild(row);
+    });
+    statusEl.textContent = list.length ? '' : 'keine Kommandos';
+  } catch (e) {
+    if (seq === _cmdHistSeq) statusEl.textContent = `Fehler: ${e.message}`;
+  }
+}
+
+function stopImageWatch() {
+  if (_camWatch) clearTimeout(_camWatch.timer);
+  _camWatch = null;
+  document.getElementById('cmd-cam-watch').textContent = '';
+}
+
+// Nach einer Bildanforderung jede Minute nachsehen, ob ein neuer Bildsatz da ist
+function watchForNewImages(imei, sinceMs) {
+  stopImageWatch();
+  const watchEl = document.getElementById('cmd-cam-watch');
+  const until   = sinceMs + CAM_WATCH_MS;
+  const watch   = { imei, timer: null };
+  _camWatch = watch;
+  watchEl.textContent = '⏳ Warte auf neue Bilder — kommen direkt nach der nächsten regulären Übertragung (Prüfung jede Minute)…';
+  const check = async () => {
+    if (_camWatch !== watch) return;
+    if (imei !== activeImei || Date.now() > until) {
+      stopImageWatch();
+      if (imei === activeImei) watchEl.textContent = 'Keine neuen Bilder eingetroffen — Verlauf, Batterie und Betriebsmodus prüfen.';
+      return;
+    }
+    try {
+      const hrs  = Math.ceil((Date.now() - sinceMs) / 3_600_000) + 1;
+      const resp = await apiFetch(`/api/images?imei=${encodeURIComponent(imei)}&hours=${hrs}`, 60_000);
+      const { sets = [] } = await resp.json();
+      // Bildsätze tragen die Aufnahmezeit; 1 min Toleranz für Uhrabweichung
+      const fresh = sets.find(st => st.ts >= sinceMs - 60_000);
+      if (fresh && _camWatch === watch) {
+        stopImageWatch();
+        watchEl.textContent = `📷 Neue Bilder eingetroffen (${new Date(fresh.ts).toISOString().slice(11, 16)} UTC) — `;
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = 'im Kamera-Tab anzeigen';
+        link.onclick = ev => { ev.preventDefault(); switchTab('camera'); loadCameraImages(); };
+        watchEl.appendChild(link);
+        return;
+      }
+    } catch (e) {
+      console.warn('watchForNewImages:', e);
+    }
+    if (_camWatch === watch) watch.timer = setTimeout(check, 60_000);
+  };
+  watch.timer = setTimeout(check, 60_000);
+}
+
+// Betriebsmodus laut B-Feld (Handbuch: M:0 = 3 h, M:1 = 1 h, M:2 = 20 min; M:3 = 5 min wie im Portal)
+const MODE_LABELS = ['3h', '1h', '20min', '5min', '1min', '20s', '10s'];
+
+// B-Feld Teil 3: 24-Bit-Hexmaske, Bit n = Auto-Bild zur UTC-Stunde n
+function decodeAutoImgHours(hex) {
+  if (!/^[0-9a-fA-F]{6}$/.test(hex || '')) return null;
+  const mask = parseInt(hex, 16), hours = [];
+  for (let h = 0; h < 24; h++) if (mask & (1 << h)) hours.push(String(h).padStart(2, '0') + '00');
+  return hours;
+}
+
+// Zeigt den Stand laut letztem Paket — so sieht man nach der nächsten
+// Übertragung, ob ein M:- oder i:-Kommando am Gerät angekommen ist.
+function updateCmdDeviceStatus(last) {
+  const el = document.getElementById('cmd-dev-status');
+  if (!el) return;
+  if (!last) { el.textContent = ''; return; }
+  const hours = decodeAutoImgHours(last.autoImgHex);
+  const parts = [
+    `Modus ${last.opMode != null ? (MODE_LABELS[last.opMode] || last.opMode) : '?'}`,
+    `Auto-Bilder ${hours == null ? '?' : hours.length ? hours.join(', ') + ' UTC' : 'aus'}`,
+    `Batterie ${last.battV != null && !isNaN(last.battV) ? last.battV.toFixed(2) + ' V' : '?'}`,
+  ];
+  const ts = last.datetime && !isNaN(last.datetime) ? last.datetime.toISOString().slice(11, 16) + ' UTC' : '?';
+  el.textContent = `Gerätestatus laut letztem Paket (${ts}): ${parts.join(' · ')}`;
+}
+
+function resetCommandPanel() {
+  _cmdHistSeq++;
+  stopImageWatch();
+  document.getElementById('cmd-history-rows').innerHTML = '';
+  document.getElementById('cmd-history-status').textContent = '';
+  const r = document.getElementById('cmd-result');
+  r.className = 'cmd-result'; r.textContent = ''; r.style.display = '';
 }
 
 const SAMPLE_DATA = `@0deN:192:10/10  B:5.20:2:000000:79:000:ZZ  T:26/04/15,23:55:39  LA:54.35930  LO:13.08380  EL:15:z  OR:354:6:6  TA:9.0  BA:1018.61:3012  RH:76  WI:1:?:0.5:S  GU:1:?  LD:?:0:--  CL:2ca14:1929:0:1879:2204  PW:0.00:0:?:--:90:271:271  VI:6.3  XA:0:0:0:0  XD:0:0:0:0:0  ;
@@ -3590,7 +3740,7 @@ function parsePacket(raw) {
 
   // B: battery
   const B = parseTag(raw,'B');
-  if(B){ const p=B.split(':'); r.battV=parseFloat(p[0]); r.opMode=parseInt(p[1]); r.daysOp=parseInt(p[4])||0; }
+  if(B){ const p=B.split(':'); r.battV=parseFloat(p[0]); r.opMode=parseInt(p[1]); r.autoImgHex=p[2]||''; r.daysOp=parseInt(p[4])||0; }
 
   // T: time
   const T = parseTag(raw,'T');
@@ -4346,6 +4496,7 @@ function renderStation(data) {
   document.getElementById('cmd-panel').style.display = activeSource === 'quantimet' ? '' : 'none';
 
   const first=data[0], last=data[data.length-1];
+  updateCmdDeviceStatus(last);
   const cards=[
     {label:'GPS Latitude', value:first.lat!=null?first.lat.toFixed(5)+'°':'—', sub:'WGS84'},
     {label:'GPS Longitude', value:first.lon!=null?first.lon.toFixed(5)+'°':'—', sub:'WGS84'},
@@ -4353,7 +4504,7 @@ function renderStation(data) {
     {label:'Kompass', value:first.compass!=null?first.compass+'°':'—', sub:'Magnetisch Nord'},
     {label:'Tilt', value:first.tilt!=null?first.tilt+'°':'—', sub:`Richtung: ${first.tiltDir||'?'}°`},
     {label:'Betriebstage', value:last.daysOp||'?', sub:'Zähler'},
-    {label:'Modus', value:last.opMode!=null?(['—','1h','20min','5min','1min','20s','10s'][last.opMode]||last.opMode):'?', sub:'Reporting'},
+    {label:'Modus', value:last.opMode!=null?(MODE_LABELS[last.opMode]||last.opMode):'?', sub:'Reporting'},
     {label:'Letzter Empfang', value:last.datetime?last.datetime.toISOString().replace('T',' ').slice(0,16):'?', sub:'UTC'},
     {label:'Datensätze', value:data.length, sub:'geladen'},
   ];
@@ -4917,6 +5068,7 @@ function clearAll() {
   stopPolling();
   fileHandle   = null;
   activeSource = 'file';
+  resetCommandPanel();
   activeImei   = null;
   _serOffset   = 0;
   allData    = [];
@@ -4950,6 +5102,7 @@ function onQtmDeviceChange() {
   stopPolling();
   _qtmSeq++;           // noch laufende Antwort des alten Geräts verwerfen
   _pollError = ''; _lastLoadOk = null;
+  resetCommandPanel();
   activeImei = null;
   allData    = [];
   parsedData = [];
