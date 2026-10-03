@@ -51,6 +51,21 @@ _lock    = threading.Lock()
 _token   = {'value': None, 'expires': 0.0}
 _devs    = {'list': None,  'fetched': 0.0}
 _session = requests.Session()   # persists cookies across requests
+# Wie ein Browser auf portal.quantimet.com auftreten: Kommandos, die mit den
+# python-requests-Standardheadern geschickt wurden, hat Quantimet zwar mit
+# "Command Sent Ok" quittiert, aber nie an das Gerät verschickt (nicht im
+# Verlauf). Mit diesen Headern kommen sie an (getestet 2026-10-03).
+_session.headers.update({
+    'User-Agent':      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
+                       '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+    'Accept':          '*/*',
+    'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
+    'Origin':          'https://portal.quantimet.com',
+    'Referer':         'https://portal.quantimet.com/',
+    'Sec-Fetch-Site':  'same-site',
+    'Sec-Fetch-Mode':  'cors',
+    'Sec-Fetch-Dest':  'empty',
+})
 
 
 def _load_cfg():
@@ -470,28 +485,29 @@ def api_command():
         modem  = device.get('modem', '') or ''
         method = 'MWSCellCommands' if modem == 'Cellular' else 'MWSCommands'
 
-        payload = {
+        # Feldreihenfolge und kompaktes JSON exakt wie das Quantimet-Portal
+        payload = json.dumps({
             'deviceId': device['id'],
             'options': {
                 'method': method,
                 'params': {
-                    'CmdSendDate':     now_ms,
-                    'Command':         [command],
                     'DestinationIMEI': [imei],
                     'DeviceType':      ['MWS'],
+                    'Command':         [command],
                     'Issuer':          [cfg['username']],
                     'Modem':           [modem],
+                    'CmdSendDate':     now_ms,
                 },
                 'timeout': 5000,
             },
-        }
+        }, separators=(',', ':'))
 
         def fetch(token):
             return _session.post(
                 f'{QUANTIMET}/unit/commands/send',
-                json=payload,
+                data=payload,
                 headers=_portal_headers(token),
-                timeout=15,
+                timeout=30,
             )
 
         try:
@@ -502,10 +518,43 @@ def api_command():
             print(f'[CMD] {imei} {command!r} → HTTP {resp.status_code} body={resp.text!r}')
             return jsonify({'error': f'Quantimet hat abgelehnt (HTTP {resp.status_code})'
                                      + (f': {resp.text.strip()[:200]}' if resp.text.strip() else '')}), 502
-        print(f'[CMD] {imei} {command!r} → HTTP {r.status_code} body={r.text!r}')
-        return jsonify({'result': r.text.strip() or 'Command Sent Ok', 'status': r.status_code})
+        print(f'[CMD] {imei} {command!r} → HTTP {r.status_code} body={r.text!r} '
+              f'({time.time() - now_ms / 1000:.1f} s)')
+
+        # "Command Sent Ok" kommt auch für Kommandos, die nie verschickt
+        # werden — echte Bestätigung ist erst der Eintrag im Verlauf.
+        confirmed = None
+        for _ in range(8):
+            time.sleep(3)
+            try:
+                hist = _fetch_command_history(imei, now_ms - 15_000, int(time.time() * 1000))
+            except Exception:
+                continue
+            if hist:
+                confirmed = hist[0]
+                break
+        print(f'[CMD] {imei} {command!r} → Verlauf: {confirmed!r}')
+        return jsonify({'result': r.text.strip() or 'Command Sent Ok', 'status': r.status_code,
+                        'confirmed': confirmed})
     except Exception as exc:
         return _upstream_error(exc)
+
+
+def _fetch_command_history(imei, start_ms, end_ms):
+    """Verlauf von Quantimet, neueste zuerst: [{ts, command, status}, …]."""
+    def fetch(token):
+        return _session.get(
+            f'{QUANTIMET}/unit/commands/history',
+            params={'imei': imei, 'startTime': start_ms, 'endTime': end_ms},
+            headers=_auth_headers(token),
+            timeout=20,
+        )
+
+    r = _retry_on_401(fetch)
+    rows = [{'ts': e.get('ts'), 'command': e.get('Settings', ''), 'status': e.get('MsgStatus', '')}
+            for e in r.json()]
+    rows.sort(key=lambda e: e['ts'] or 0, reverse=True)
+    return rows
 
 
 @app.route('/api/command/history')
@@ -523,20 +572,7 @@ def api_command_history():
         if not any(d['imei'] == imei for d in devices):
             return jsonify({'error': f'Device {imei} not found'}), 404
         now_ms = int(time.time() * 1000)
-
-        def fetch(token):
-            return _session.get(
-                f'{QUANTIMET}/unit/commands/history',
-                params={'imei': imei, 'startTime': now_ms - days * 86_400_000, 'endTime': now_ms},
-                headers=_auth_headers(token),
-                timeout=20,
-            )
-
-        r = _retry_on_401(fetch)
-        rows = [{'ts': e.get('ts'), 'command': e.get('Settings', ''), 'status': e.get('MsgStatus', '')}
-                for e in r.json()]
-        rows.sort(key=lambda e: e['ts'] or 0, reverse=True)
-        return jsonify(rows)
+        return jsonify(_fetch_command_history(imei, now_ms - days * 86_400_000, now_ms))
     except Exception as exc:
         return _upstream_error(exc)
 

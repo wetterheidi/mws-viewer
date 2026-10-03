@@ -3547,17 +3547,24 @@ async function sendCommand(cmd) {
   const imei = activeImei, label = activeDeviceLabel();
   _cmdBusy = true;
   document.querySelectorAll('#cmd-panel .cmd-btn').forEach(b => b.disabled = true);
-  showCmdResult('', `Sende ${cmd} an ${label}…`);
+  showCmdResult('', `Sende ${cmd} an ${label} und warte auf Bestätigung im Quantimet-Verlauf…`);
   try {
-    const resp = await apiFetch('/api/command', 45_000, {
+    const resp = await apiFetch('/api/command', 90_000, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({imei, command: cmd}),
     });
     const data = await resp.json();
-    showCmdResult('ok', `✓ ${cmd} an ${label} übergeben (${data.result}) — `
-      + 'das Gerät holt es bei seiner nächsten Übertragung ab.');
-    if (/(^| )I:[1-5]/.test(cmd)) watchForNewImages(imei, Date.now());
+    // Quantimet antwortet immer "Command Sent Ok" — verschickt ist das
+    // Kommando erst, wenn es im Verlauf steht (prüft der Server ~25 s lang).
+    if (data.confirmed) {
+      showCmdResult('ok', `✓ ${cmd} an ${label} verschickt (${data.confirmed.command}: ${data.confirmed.status}) — `
+        + 'das Gerät führt es nach seiner nächsten Übertragung aus.');
+      if (/(^| )I:[1-5]/.test(cmd)) watchForNewImages(imei, Date.now());
+    } else {
+      showCmdResult('err', `⚠ ${cmd}: Quantimet hat angenommen („${data.result}“), aber das Kommando `
+        + 'steht nicht im Verlauf — vermutlich nicht verschickt. Verlauf in 1–2 min prüfen, ggf. erneut senden.');
+    }
   } catch (e) {
     showCmdResult('err', `✗ ${cmd} an ${label}: ${e.message}`);
   } finally {
