@@ -972,6 +972,11 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
 .prod-form .wide { grid-column: 1 / -1; }
 .prod-form textarea { min-height: 90px; resize: vertical; }
 .prod-form-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+#prod-file-wrap { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--text2); }
+.prod-file-row  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.prod-preview   { max-width: 320px; max-height: 200px; border-radius: 4px; border: 1px solid var(--border);
+                  align-self: flex-start; }
+.prod-form.dragover { border-color: var(--accent); background: var(--bg3); }
 
 /* ── COMMAND PANEL ── */
 .cmd-panel       { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 18px; }
@@ -2052,9 +2057,14 @@ body.day-mode .mt-qnh  { color: #6a0dad; }
       <label class="wide" id="prod-text-wrap">Text
         <textarea id="prod-text" oninput="onProdTextInput()" placeholder="TAF EDXX 021100Z 0212/0312 24010KT 9999 SCT030 …"></textarea>
       </label>
-      <label class="wide" id="prod-file-wrap" style="display:none">Datei
-        <input type="file" id="prod-file" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt">
-      </label>
+      <div class="wide" id="prod-file-wrap" style="display:none">Datei
+        <div class="prod-file-row">
+          <input type="file" id="prod-file" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt" onchange="setProdFile(this.files[0], 'input')">
+          <button type="button" class="btn-ghost btn-sm" onclick="pasteProdImage()">📋 Aus Zwischenablage</button>
+          <span>oder Strg/⌘+V bzw. Datei hierher ziehen</span>
+        </div>
+        <img class="prod-preview" id="prod-preview" alt="Vorschau" hidden>
+      </div>
       <div class="prod-form-actions">
         <button type="submit" class="btn-primary">⬆ Veröffentlichen</button>
         <span class="cam-status" id="prod-form-status"></span>
@@ -3148,6 +3158,136 @@ function onProdTextInput() {
   if (!toEl.value)   toEl.value   = fmt(toDate(m[3], m[4]));
 }
 
+// ── Bild aus Zwischenablage / Drag & Drop ins Upload-Formular ──
+const PROD_IMG_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+
+// Große Bilder vor dem Upload verkleinern. Kleine Dateien bleiben unangetastet
+// (PNG-Grafiken behalten so ihre scharfen Kanten), GIFs ebenfalls (Animation).
+const PROD_IMG_MAX_BYTES = 3 * 1024 * 1024;   // Ziel: höchstens 3 MB
+const PROD_IMG_MAX_EDGE  = 2560;              // längste Kante in px
+let _prodFilePending = null;                  // laufende Verkleinerung (Upload wartet darauf)
+
+const fmtBytes = n => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} kB`;
+
+async function shrinkProdImage(file) {
+  if (!PROD_IMG_EXT[file.type] || file.type === 'image/gif') return file;
+  const bmp = await createImageBitmap(file);
+  const edge = Math.max(bmp.width, bmp.height);
+  if (file.size <= PROD_IMG_MAX_BYTES && edge <= PROD_IMG_MAX_EDGE) { bmp.close(); return file; }
+
+  const encode = (scale, type, quality) => {
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(bmp.width * scale));
+    c.height = Math.max(1, Math.round(bmp.height * scale));
+    const ctx = c.getContext('2d');
+    if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); }  // keine Transparenz
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    return new Promise(res => c.toBlob(res, type, quality));
+  };
+
+  // Reihenfolge: PNG nur verkleinert (verlustfrei, gut für Karten/Diagramme),
+  // dann WebP (fällt in alten Safaris auf JPEG zurück) mit sinkender Qualität,
+  // danach weiter verkleinern.
+  let scale = Math.min(1, PROD_IMG_MAX_EDGE / edge);
+  let best = null;
+  try {
+    if (file.type === 'image/png') {
+      const b = await encode(scale, 'image/png');
+      if (b && b.size <= PROD_IMG_MAX_BYTES) best = b;
+    }
+    const lossy = await encode(0.05, 'image/webp', 0.8).then(b => b?.type === 'image/webp' ? 'image/webp' : 'image/jpeg');
+    for (let i = 0; !best && i < 6; i++, scale *= 0.8) {
+      for (const q of [0.9, 0.82, 0.75]) {
+        const b = await encode(scale, lossy, q);
+        if (b && b.size <= PROD_IMG_MAX_BYTES) { best = b; break; }
+      }
+    }
+  } finally {
+    bmp.close();
+  }
+  if (!best) return file;   // nichts Passendes gefunden → Original, Server entscheidet
+  const base = file.name.replace(/\.[^.]+$/, '');
+  return new File([best], `${base}.${PROD_IMG_EXT[best.type]}`, { type: best.type });
+}
+
+// Datei ins <input type=file> übernehmen (DataTransfer), Typ auf "Datei" stellen.
+function setProdFile(file, source) {
+  if (!file) return false;
+  // Bilder aus der Zwischenablage heißen sonst nur "image.png"
+  if (source === 'clipboard' && PROD_IMG_EXT[file.type]) {
+    const ts = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13).replace('T', '_');
+    file = new File([file], `zwischenablage_${ts}Z.${PROD_IMG_EXT[file.type]}`, { type: file.type });
+  }
+  const statusEl = document.getElementById('prod-form-status');
+  const label = { clipboard: 'Aus Zwischenablage', drop: 'Übernommen', input: 'Gewählt' }[source] || 'Übernommen';
+  document.getElementById('prod-type').value = 'file';
+  onProdTypeChange();
+  statusEl.textContent = `${label}: ${file.name} — prüfe Größe…`;
+
+  const job = _prodFilePending = shrinkProdImage(file).catch(e => {
+    console.warn('shrinkProdImage:', e);
+    return file;
+  }).then(out => {
+    if (job !== _prodFilePending) return;   // inzwischen anderes Bild gewählt
+    const dt = new DataTransfer();
+    dt.items.add(out);
+    document.getElementById('prod-file').files = dt.files;
+    showProdPreview();
+    statusEl.textContent = out === file
+      ? `${label}: ${file.name} (${fmtBytes(file.size)})`
+      : `${label}: ${out.name} — verkleinert ${fmtBytes(file.size)} → ${fmtBytes(out.size)}`;
+    _prodFilePending = null;
+  });
+  return true;
+}
+
+function showProdPreview() {
+  const img = document.getElementById('prod-preview');
+  const f = document.getElementById('prod-file').files[0];
+  if (img.src) URL.revokeObjectURL(img.src);
+  if (f && PROD_IMG_EXT[f.type]) { img.src = URL.createObjectURL(f); img.hidden = false; }
+  else { img.removeAttribute('src'); img.hidden = true; }
+}
+
+// Knopf: Clipboard-API (braucht HTTPS oder localhost und eine Browser-Freigabe)
+async function pasteProdImage() {
+  const statusEl = document.getElementById('prod-form-status');
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      const type = item.types.find(t => PROD_IMG_EXT[t]);
+      if (type) { setProdFile(new File([await item.getType(type)], 'image', { type }), 'clipboard'); return; }
+    }
+    statusEl.textContent = 'Kein Bild in der Zwischenablage.';
+  } catch (e) {
+    statusEl.textContent = 'Zugriff auf Zwischenablage nicht möglich — bitte Strg/⌘+V verwenden.';
+    console.warn('pasteProdImage:', e);
+  }
+}
+
+// Strg/⌘+V: nur wenn der Produkte-Tab offen und das Admin-Formular sichtbar ist.
+// Reiner Text (z. B. TAF ins Textfeld) wird nicht abgefangen.
+document.addEventListener('paste', ev => {
+  const form = document.getElementById('prod-form');
+  if (!document.getElementById('panel-products').classList.contains('active')
+      || form.style.display === 'none') return;
+  const file = [...(ev.clipboardData?.files || [])].find(f => PROD_IMG_EXT[f.type]);
+  if (file) { ev.preventDefault(); setProdFile(file, 'clipboard'); }
+});
+
+(() => {
+  const form = document.getElementById('prod-form');
+  form.addEventListener('dragover', ev => {
+    if ([...ev.dataTransfer.types].includes('Files')) { ev.preventDefault(); form.classList.add('dragover'); }
+  });
+  form.addEventListener('dragleave', () => form.classList.remove('dragover'));
+  form.addEventListener('drop', ev => {
+    form.classList.remove('dragover');
+    const file = ev.dataTransfer.files[0];
+    if (file) { ev.preventDefault(); setProdFile(file, 'drop'); }
+  });
+})();
+
 async function uploadProduct(ev) {
   ev.preventDefault();
   const statusEl = document.getElementById('prod-form-status');
@@ -3161,6 +3301,7 @@ async function uploadProduct(ev) {
   fd.append('valid_from', document.getElementById('prod-from').value);
   fd.append('valid_to', document.getElementById('prod-to').value);
   if (type === 'file') {
+    if (_prodFilePending) { statusEl.textContent = 'Bild wird noch verkleinert…'; await _prodFilePending; }
     const f = document.getElementById('prod-file').files[0];
     if (!f) { statusEl.textContent = 'Bitte Datei wählen.'; return; }
     fd.append('file', f);
@@ -3175,6 +3316,7 @@ async function uploadProduct(ev) {
     statusEl.textContent = '✓ Veröffentlicht';
     document.getElementById('prod-form').reset();
     onProdTypeChange();
+    showProdPreview();
     loadProducts();
   } catch (e) {
     statusEl.textContent = `✗ ${e.message}`;
