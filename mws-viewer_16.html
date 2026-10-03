@@ -3344,6 +3344,7 @@ let _gmKey = '';      // Position/Tag/Modell des angezeigten GRAMET
 let _gmSeq = 0;
 const GM_MAX_AGE_MS = 30 * 60 * 1000;
 let _gmLoadedAt = 0;
+let _gmLayersInit = false;   // Overlays nur beim ersten Anzeigen abschalten
 
 function mwsPosition() {
   for (let i = allData.length - 1; i >= 0; i--) {
@@ -3391,8 +3392,14 @@ async function loadGramet(force = false) {
     _gmKey = key; _gmLoadedAt = Date.now();
     const fallback = res.tried.length ? ` (statt ${res.tried.map(t => t.model).join(', ')})` : '';
     meta.textContent = `${pos.lat.toFixed(3)}, ${pos.lon.toFixed(3)} · ${model === 'auto' ? 'Auto: ' : ''}${res.label}${fallback}`;
+    // Start ohne Overlays (Isothermen, Hazards, …); danach gilt, was der Nutzer
+    // im Panel anklickt — die Komponente behält den Zustand selbst.
+    const layers = _gmLayersInit ? undefined
+      : Object.fromEntries(Object.keys(panel.layers).map(k => [k, false]));
+    _gmLayersInit = true;
     panel.update({
       grid: res.grid,
+      layers,
       maxHeight: 3000,
       zoomLabel: 'bis 3 km',
       subtitle: `${day} · ${res.label}`,
